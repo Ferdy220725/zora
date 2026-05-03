@@ -11,7 +11,7 @@ interface Tugas {
   id: string;
   judul_tugas: string;
   mk_nama: string;
-  deadline: string; // ISO format
+  deadline: string;
   deskripsi?: string;
   link_pengumpulan?: string;
 }
@@ -29,8 +29,6 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'perlu dikerjakan' | 'sudah selesai'>('perlu dikerjakan');
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [topThree, setTopThree] = useState<Leader[]>([]);
-
-  // --- LOGIKA BARU: ZOOM STATE ---
   const [zoomMeetings, setZoomMeetings] = useState<any[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -50,15 +48,13 @@ export default function Dashboard() {
   useEffect(() => {
     fetchDataAndSync();
     checkDeadlineTrigger();
-
-    // Timer untuk update status tombol Zoom (Time-Lock)
     const zoomTimer = setInterval(() => setCurrentTime(new Date()), 30000);
     return () => clearInterval(zoomTimer);
   }, []);
 
   useEffect(() => {
     if (showLeaderboard) {
-      const timer = setTimeout(() => { setShowLeaderboard(false); }, 10000);
+      const timer = setTimeout(() => setShowLeaderboard(false), 10000);
       return () => clearTimeout(timer);
     }
   }, [showLeaderboard]);
@@ -67,18 +63,19 @@ export default function Dashboard() {
     const { data } = await supabase.from('tugas_perkuliahan').select('*').order('deadline', { ascending: true });
     if (data) setTugas(data as Tugas[]);
 
-    // Ambil Data Zoom
     const { data: zData } = await supabase.from('zoom_meetings').select('*').eq('is_active', true).order('waktu_mulai', { ascending: true });
     if (zData) setZoomMeetings(zData);
 
-    const savedName = localStorage.getItem('nama_user_solaria') || 'Hallo, Sobat Agrotek';
+    const savedName = localStorage.getItem('nama_user_solaria') || 'Sobat Agrotek';
     setDisplayName(`${savedName.trim().split(' ')[0]} 🍃`);
     
     const savedCompleted = JSON.parse(localStorage.getItem('agrotek_completed_tasks') || '[]');
     setCompletedTaskIds(savedCompleted);
 
     await supabase.from('user_progress').upsert({
-      nama_user: savedName, tugas_selesai: savedCompleted.length, last_update: new Date()
+      nama_user: savedName, 
+      tugas_selesai: savedCompleted.length, 
+      last_update: new Date()
     }, { onConflict: 'nama_user' });
   };
 
@@ -94,7 +91,11 @@ export default function Dashboard() {
 
     if (isMomentOfTruth) {
       const { data: leaders } = await supabase.from('user_progress').select('nama_user, tugas_selesai').order('tugas_selesai', { ascending: false }).limit(3);
-      if (leaders) { setTopThree(leaders); setShowLeaderboard(true); localStorage.setItem('last_leaderboard_show', now.toISOString()); }
+      if (leaders) { 
+        setTopThree(leaders); 
+        setShowLeaderboard(true); 
+        localStorage.setItem('last_leaderboard_show', now.toISOString()); 
+      }
     }
   };
 
@@ -109,8 +110,8 @@ export default function Dashboard() {
     const rawName = localStorage.getItem('nama_user_solaria') || 'Sobat Agrotek';
     
     await supabase.from('user_progress').upsert({
-      nama_user: rawName,
-      tugas_selesai: newCompleted.length,
+      nama_user: rawName, 
+      tugas_selesai: newCompleted.length, 
       last_update: new Date()
     }, { onConflict: 'nama_user' });
 
@@ -122,13 +123,12 @@ export default function Dashboard() {
 
   const formatDeadline = (dateStr: string) => {
     const d = new Date(dateStr);
-    const dayName = days[d.getDay()];
+    const day = days[d.getDay()];
     const date = d.getDate().toString().padStart(2, '0');
     const month = (d.getMonth() + 1).toString().padStart(2, '0');
-    const year = d.getFullYear();
     const hours = d.getHours().toString().padStart(2, '0');
     const minutes = d.getMinutes().toString().padStart(2, '0');
-    return `${dayName}, ${date}/${month}/${year} pukul ${hours}:${minutes} WIB`;
+    return `${day}, ${date}/${month} pkl ${hours}:${minutes} WIB`;
   };
 
   const isMepet = (dateStr: string) => {
@@ -136,26 +136,21 @@ export default function Dashboard() {
     return diff > 0 && diff < (6 * 60 * 60 * 1000);
   };
 
-  const persentase = tugas.length > 0 ? (completedTaskIds.length / tugas.length) * 100 : 0;
-  
-  const getPlant = () => {
-    if (persentase === 0) return { e: "🟫", t: "Lahan Kosong", c: "text-amber-900" };
-    if (persentase >= 100) return { e: "🧺", t: "Siap Panen!", c: "text-orange-600" };
-    if (persentase <= 30) return { e: "🌱", t: "Baru Tumbuh", c: "text-green-700" };
-    if (persentase <= 70) return { e: "🌿", t: "Mulai Rimbun", c: "text-green-800" };
-    return { e: "🌳", t: "Hampir Panen", c: "text-green-900" };
-  };
-  const plant = getPlant();
-
-  const displayedTugas = tugas.filter(t => activeTab === 'perlu dikerjakan' ? !completedTaskIds.includes(t.id) : completedTaskIds.includes(t.id));
+  const displayedTugas = tugas.filter(t => 
+    activeTab === 'perlu dikerjakan' ? !completedTaskIds.includes(t.id) : completedTaskIds.includes(t.id)
+  );
 
   if (!showDashboard) {
     return (
       <div className="h-screen w-full bg-[#f8f9fa] flex flex-col items-center justify-center p-6">
-        <div className="w-48 h-48 md:w-64 md:h-64 mb-2"><Lottie animationData={catAnimation} loop={true} /></div>
+        <div className="w-48 h-48 md:w-64 md:h-64 mb-2">
+          <Lottie animationData={catAnimation} loop={true} />
+        </div>
         <div className="text-center bg-white p-8 rounded-[35px] shadow-2xl border-b-[8px] border-[#800020] w-full max-w-sm border-2 border-slate-200">
           <h1 className="text-2xl font-black text-[#800020] uppercase leading-tight italic">HALLO, {displayName}</h1>
-          <button onClick={() => setShowDashboard(true)} className="w-full mt-6 bg-[#800020] text-white py-4 rounded-xl font-black uppercase shadow-lg active:scale-95 transition-all">Buka Dashboard →</button>
+          <button onClick={() => setShowDashboard(true)} className="w-full mt-6 bg-[#800020] text-white py-4 rounded-xl font-black uppercase shadow-lg active:scale-95 transition-all">
+            Buka Dashboard →
+          </button>
         </div>
       </div>
     );
@@ -163,6 +158,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#fcfcfc] font-sans pb-20 overflow-x-hidden">
+      {/* LEADERBOARD OVERLAY */}
       {showLeaderboard && (
         <div className="fixed inset-0 z-[999] bg-[#800020] flex items-center justify-center p-6 text-white animate-in fade-in duration-500">
           <div className="max-w-2xl w-full text-center">
@@ -182,163 +178,161 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* EXAM NOTIFICATION */}
       {(isETS || isEAS) && (
         <div className="sticky top-0 z-[60] bg-red-600 text-white py-3 border-b-4 border-yellow-400 text-center font-black uppercase text-xs md:text-sm tracking-widest shadow-xl px-4">
           🚨 MINGGU {isETS ? 'ETS' : 'EAS'} SEDANG BERLANGSUNG! SEMANGAT! 🚨
         </div>
       )}
 
+      {/* HEADER BANNER */}
+      <div className="relative w-full">
+        <div className="relative w-full h-[220px] md:h-[300px] overflow-hidden shadow-lg border-b-8 border-slate-300">
+          <img 
+            src="/foto-kelas-c-01.webp" 
+            alt="Foto Kelas C" 
+            className="w-full h-full object-cover grayscale-[20%] brightness-75 transition-all hover:scale-105 duration-700" 
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col items-center justify-center text-center p-4">
+            <h1 className="text-2xl md:text-5xl font-black text-white uppercase italic tracking-tighter drop-shadow-2xl">
+              SISTEM MANAJEMEN KELAS C
+            </h1>
+            <p className="text-[10px] md:text-xs font-bold text-slate-200 mt-2 uppercase tracking-[0.3em] bg-black/40 px-4 py-1 rounded-full backdrop-blur-sm">
+              Dimana Bumi dan Ilmu Pengetahuan Bersatu
+            </p>
+          </div>
+        </div>
+        <div className="w-full h-12 bg-gradient-to-b from-slate-300 to-[#fcfcfc]"></div>
+      </div>
+
       <div className={`p-4 md:p-10 max-w-7xl mx-auto transition-all ${showLeaderboard ? 'blur-2xl' : ''}`}>
         
-        <div className="mb-10 flex flex-col items-center text-center border-b-4 border-slate-300 pb-8">
-          <h1 className="text-3xl md:text-6xl font-black text-[#800020] uppercase leading-none italic mb-3 tracking-tighter">SISTEM MANAJEMEN KELAS C</h1>
-          <p className="text-[11px] md:text-sm font-black text-slate-800 uppercase tracking-[0.2em] italic mb-1">Uni Terra Et Scienta Coniunguntur</p>
-          <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-[0.4em]">Dimana Bumi dan Ilmu Pengetahuan Bersatu</p>
-          <div className="mt-6 bg-slate-800 text-white px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">
-            {todayName}, {todayStr}
+        {/* QUICK STATS & LINKS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+          <button 
+            onClick={() => router.push('/absensi')} 
+            className="bg-[#800020] text-white p-6 rounded-[35px] font-black uppercase text-lg border-b-8 border-[#5a0016] italic active:scale-95 transition-all shadow-xl flex items-center justify-center gap-3"
+          >
+            📝 Absensi
+          </button>
+
+          <div className="bg-white p-5 rounded-[35px] shadow-xl border-b-8 border-blue-600 border-2 border-slate-200 flex flex-col justify-center items-center text-center">
+            <p className="text-[9px] font-black text-slate-400 uppercase italic mb-1">Status Akademik:</p>
+            <p className={`font-black uppercase text-xs ${isETS || isEAS ? 'text-red-600' : 'text-blue-700'}`}>
+              {isETS || isEAS ? 'Masa Evaluasi (ETS/EAS)' : 'Perkuliahan Aktif'}
+            </p>
+          </div>
+
+          <div className="bg-white p-5 rounded-[35px] shadow-xl border-b-8 border-slate-800 border-2 border-slate-200 flex flex-col justify-center items-center text-center">
+            <p className="text-[9px] font-black text-slate-400 uppercase italic mb-1">Hari & Tanggal:</p>
+            <p className="font-black uppercase text-xs text-slate-800">{todayName}, {todayStr}</p>
+          </div>
+
+          {/* ZOOM SECTION */}
+          <div className="bg-white p-4 rounded-[35px] shadow-xl border-b-8 border-blue-600 border-2 border-slate-200 flex flex-col h-full max-h-[140px] overflow-y-auto no-scrollbar relative">
+            <h3 className="font-black uppercase text-[10px] text-blue-600 mb-2 tracking-widest flex items-center justify-center gap-2 sticky top-0 bg-white z-10 pb-1">
+              <span className="animate-pulse">🔴</span> LIVE ZOOM
+            </h3>
+            {zoomMeetings.length > 0 ? (
+              <div className="space-y-2">
+                {zoomMeetings.map((zoom) => {
+                  const start = new Date(zoom.waktu_mulai);
+                  const isLocked = currentTime < start;
+                  const h = start.getHours().toString().padStart(2, '0');
+                  const m = start.getMinutes().toString().padStart(2, '0');
+                  return (
+                    <div key={zoom.id} className="p-2 bg-slate-50 rounded-2xl border-2 border-slate-100 text-center">
+                      <h4 className="font-black text-slate-800 text-[9px] uppercase leading-tight mb-1 truncate">{zoom.judul}</h4>
+                      {isLocked ? (
+                        <div className="p-1 bg-slate-200 rounded-lg text-[8px] font-black text-slate-500 uppercase border border-dashed border-slate-300">
+                          🔒 Terkunci s/d {h}:{m}
+                        </div>
+                      ) : (
+                        <a href={zoom.link} target="_blank" rel="noopener noreferrer" className="block p-1.5 bg-blue-600 text-white rounded-lg text-[8px] font-black uppercase shadow-md active:scale-95 transition-all">
+                          🎥 Gabung
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="h-full flex items-center justify-center mt-2 border-2 border-dashed border-slate-200 rounded-2xl p-2 bg-slate-50">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic text-center">Tidak ada jadwal</p>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="space-y-6">
-            <div className="bg-white p-8 rounded-[40px] shadow-xl border-t-[10px] border-green-800 text-center border-2 border-slate-200">
-              <div className="text-8xl mb-4">{plant.e}</div>
-              <h3 className={`font-black uppercase text-sm ${plant.c}`}>{plant.t}</h3>
-              <div className="w-full bg-slate-100 h-4 rounded-full mt-6 border-slate-300 border-2 overflow-hidden">
-                <div className="bg-green-700 h-full transition-all duration-1000 shadow-[0_0_10px_rgba(21,128,61,0.5)]" style={{ width: `${persentase}%` }}></div>
-              </div>
-              <p className="text-[11px] font-black text-slate-700 mt-3 uppercase tracking-widest">{Math.round(persentase)}% Selesai</p>
-            </div>
-
-            {/* LIVE ZOOM SECTION (TAMBAHAN) */}
-            {zoomMeetings.length > 0 && (
-              <div className="bg-white p-6 rounded-[40px] shadow-xl border-l-[10px] border-blue-600 border-2 border-slate-200">
-                <h3 className="font-black uppercase text-[10px] text-blue-600 mb-4 tracking-widest flex items-center gap-2">
-                  <span className="animate-pulse">🔴</span> LIVE ZOOM CLASS
-                </h3>
-                <div className="space-y-4">
-                  {zoomMeetings.map((zoom) => {
-                    const start = new Date(zoom.waktu_mulai);
-                    const isLocked = currentTime < start;
-                    return (
-                      <div key={zoom.id} className="p-4 bg-slate-50 rounded-3xl border-2 border-slate-100">
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <p className="text-[9px] font-black text-slate-400 uppercase">{zoom.mk_nama || 'MATA KULIAH'}</p>
-                            <h4 className="font-black text-slate-800 text-sm uppercase leading-tight">{zoom.judul}</h4>
-                          </div>
-                          <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-2 py-1 rounded-lg">
-                            {start.getHours().toString().padStart(2,'0')}:{start.getMinutes().toString().padStart(2,'0')} WIB
-                          </span>
-                        </div>
-                        {isLocked ? (
-                          <div className="mt-3 p-3 bg-slate-200 rounded-xl text-[10px] font-black text-slate-500 uppercase text-center border-2 border-dashed border-slate-300">
-                            🔒 Terkunci s/d Jam {start.getHours().toString().padStart(2,'0')}:00
-                          </div>
-                        ) : (
-                          <a href={zoom.link} target="_blank" rel="noopener noreferrer" className="block mt-3 p-3 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase text-center shadow-lg active:scale-95 transition-all">
-                            🎥 Gabung Zoom Sekarang
-                          </a>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div className="bg-white p-6 rounded-[35px] shadow-xl border-l-[10px] border-[#800020] border-2 border-slate-200">
-               <p className="text-[10px] font-black text-slate-400 uppercase italic mb-3">Status Akademik Saat Ini:</p>
-               <div className={`p-4 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-3 border-2 shadow-inner ${isETS || isEAS ? 'bg-red-50 border-red-200 text-red-700' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
-                  <span className="text-xl">{isETS || isEAS ? '⚡' : '📖'}</span>
-                  {isETS || isEAS ? 'Evaluasi Semester Aktif' : 'Masa Perkuliahan Aktif'}
-               </div>
-            </div>
-            
-            <button onClick={() => router.push('/absensi')} className="w-full bg-[#800020] text-white p-6 rounded-[35px] font-black uppercase text-2xl border-b-8 border-[#5a0016] italic active:scale-95 transition-all shadow-xl">📝 Isi Absensi</button>
-            <button onClick={() => setShowDashboard(false)} className="w-full text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-700 transition-colors">← Kembali ke Intro</button>
+        {/* TASK SECTION */}
+        <div className="w-full bg-white p-6 md:p-8 rounded-[40px] shadow-xl border-t-[10px] border-[#004d40] border-2 border-slate-200">
+          <div className="flex gap-2 mb-8 p-1.5 bg-slate-100 rounded-2xl border border-slate-200">
+            <button 
+              onClick={() => setActiveTab('perlu dikerjakan')} 
+              className={`flex-1 py-4 rounded-xl text-xs font-black uppercase transition-all ${activeTab === 'perlu dikerjakan' ? 'bg-[#004d40] text-white shadow-lg scale-[1.02]' : 'text-slate-500 hover:bg-slate-200'}`}
+            >
+              Daftar Tugas
+            </button>
+            <button 
+              onClick={() => setActiveTab('sudah selesai')} 
+              className={`flex-1 py-4 rounded-xl text-xs font-black uppercase transition-all ${activeTab === 'sudah selesai' ? 'bg-green-800 text-white shadow-lg scale-[1.02]' : 'text-slate-500 hover:bg-slate-200'}`}
+            >
+              Selesai
+            </button>
           </div>
 
-          <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-[40px] shadow-xl border-t-[10px] border-[#004d40] border-2 border-slate-200">
-            <div className="flex gap-2 mb-8 p-1.5 bg-slate-100 rounded-2xl border border-slate-200">
-              <button onClick={() => setActiveTab('perlu dikerjakan')} className={`flex-1 py-4 rounded-xl text-xs font-black uppercase transition-all ${activeTab === 'perlu dikerjakan' ? 'bg-[#004d40] text-white shadow-lg scale-[1.02]' : 'text-slate-500 hover:bg-slate-200'}`}>Daftar Tugas</button>
-              <button onClick={() => setActiveTab('sudah selesai')} className={`flex-1 py-4 rounded-xl text-xs font-black uppercase transition-all ${activeTab === 'sudah selesai' ? 'bg-green-800 text-white shadow-lg scale-[1.02]' : 'text-slate-500 hover:bg-slate-200'}`}>Selesai</button>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6">
-              {displayedTugas.length > 0 ? displayedTugas.map((t) => {
-                const isLewat = new Date().getTime() > new Date(t.deadline).getTime();
-                
-                return (
-                <div key={t.id} className={`p-6 md:p-8 rounded-[35px] border-2 transition-all flex flex-col gap-4 ${isMepet(t.deadline) && activeTab === 'perlu dikerjakan' ? 'bg-red-50 border-red-400 shadow-[0_0_20px_rgba(220,38,38,0.1)]' : 'bg-[#fdfdfd] border-slate-200 hover:border-[#004d40]'}`}>
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
-                    <span className="px-3 py-1 bg-slate-800 text-white text-[9px] font-black uppercase rounded-lg italic tracking-tighter">{t.mk_nama}</span>
-                    <div className={`flex items-center gap-2 text-[10px] font-black uppercase ${isLewat && activeTab === 'perlu dikerjakan' ? 'text-red-600' : isMepet(t.deadline) && activeTab === 'perlu dikerjakan' ? 'text-red-600 animate-pulse' : 'text-slate-500'}`}>
-                      <span>⏱️ DEADLINE:</span>
-                      <span>{formatDeadline(t.deadline)}</span>
-                    </div>
-                  </div>
-
-                  {isLewat && activeTab === 'perlu dikerjakan' ? (
-                    <div className="bg-red-700 text-white text-[9px] font-black py-1 px-3 rounded-md self-start uppercase tracking-widest">
-                      WAKTU HABIS! AKSES DITUTUP
-                    </div>
-                  ) : isMepet(t.deadline) && activeTab === 'perlu dikerjakan' && (
-                    <div className="bg-red-600 text-white text-[9px] font-black py-1 px-3 rounded-md self-start uppercase tracking-widest animate-bounce">
-                      DEADLINE MEPET! SEGERA SELESAIKAN!
-                    </div>
-                  )}
-
-                  <h3 className={`font-black text-2xl md:text-3xl uppercase leading-none tracking-tighter ${activeTab === 'sudah selesai' ? 'line-through text-slate-300' : 'text-slate-900'}`}>{t.judul_tugas}</h3>
-                  
-                  {t.deskripsi && (
-                    <details className="group cursor-pointer">
-                      <summary className="text-[10px] font-black text-[#004d40] uppercase tracking-widest list-none flex items-center gap-1 group-open:mb-3">
-                        {activeTab === 'sudah selesai' ? '' : 'Baca Selengkapnya...'}
-                      </summary>
-                      <div className="p-5 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                        <p className="text-[13px] text-slate-700 font-medium leading-relaxed whitespace-pre-line">{t.deskripsi}</p>
+          <div className="grid grid-cols-1 gap-4">
+            {displayedTugas.length > 0 ? displayedTugas.map((t) => {
+              const isLewat = new Date().getTime() > new Date(t.deadline).getTime();
+              return (
+                <details key={t.id} className={`group bg-[#fdfdfd] border-2 rounded-[30px] transition-all overflow-hidden ${isMepet(t.deadline) && activeTab === 'perlu dikerjakan' ? 'border-red-400' : 'border-slate-200'}`}>
+                  <summary className="p-6 cursor-pointer list-none flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="px-2 py-0.5 bg-slate-800 text-white text-[8px] font-black uppercase rounded italic tracking-tighter">{t.mk_nama}</span>
+                        <span className={`text-[9px] font-black uppercase ${isLewat && activeTab === 'perlu dikerjakan' ? 'text-red-600' : isMepet(t.deadline) && activeTab === 'perlu dikerjakan' ? 'text-red-600 animate-pulse' : 'text-slate-400'}`}>
+                          ⏱️ {formatDeadline(t.deadline)}
+                        </span>
                       </div>
-                    </details>
-                  )}
+                      <h3 className={`font-black text-lg md:text-xl uppercase leading-none tracking-tighter ${activeTab === 'sudah selesai' ? 'line-through text-slate-300' : 'text-slate-900'}`}>
+                        {t.judul_tugas}
+                      </h3>
+                    </div>
+                    <div className="text-xl transition-transform group-open:rotate-180 text-slate-300">⬇️</div>
+                  </summary>
 
-                  <div className="flex flex-col sm:flex-row gap-3 mt-2">
-                    {t.link_pengumpulan && activeTab === 'perlu dikerjakan' && !isLewat && (
-                      <a href={t.link_pengumpulan} target="_blank" rel="noopener noreferrer" className="flex-[2] bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-xs text-center shadow-lg hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center gap-2">
-                        🚀 Kumpulkan Sekarang
-                      </a>
-                    )}
-                    
-                    {activeTab === 'perlu dikerjakan' ? (
-                      isLewat ? (
-                        <div className="flex-1 py-4 rounded-2xl font-black uppercase text-xs border-4 border-red-200 text-red-400 text-center bg-red-50 opacity-60 cursor-not-allowed">
-                          ❌ Deadline Berakhir
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleToggleDone(t.id, false)}
-                          className="flex-1 py-4 rounded-2xl font-black uppercase text-xs border-4 border-green-700 text-green-800 hover:bg-green-50 active:scale-95 transition-all"
-                        >
-                          Selesai ✓
-                        </button>
-                      )
-                    ) : (
+                  <div className="p-6 pt-0 border-t-2 border-dashed border-slate-100 bg-slate-50/50">
+                    <div className="py-4">
+                      {isLewat && activeTab === 'perlu dikerjakan' ? (
+                        <div className="mb-4 bg-red-700 text-white text-[9px] font-black py-1 px-3 rounded uppercase tracking-widest inline-block">WAKTU HABIS!</div>
+                      ) : isMepet(t.deadline) && activeTab === 'perlu dikerjakan' && (
+                        <div className="mb-4 bg-red-600 text-white text-[9px] font-black py-1 px-3 rounded uppercase tracking-widest animate-bounce inline-block">DEADLINE MEPET!</div>
+                      )}
+                      <p className="text-[13px] text-slate-700 font-medium leading-relaxed whitespace-pre-line">{t.deskripsi || 'Tidak ada deskripsi.'}</p>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      {t.link_pengumpulan && activeTab === 'perlu dikerjakan' && !isLewat && (
+                        <a href={t.link_pengumpulan} target="_blank" rel="noopener noreferrer" className="flex-[2] bg-blue-600 text-white py-3 rounded-xl font-black uppercase text-[10px] text-center shadow-lg active:scale-95 transition-all">
+                          🚀 Kumpulkan Tugas
+                        </a>
+                      )}
                       <button
-                        onClick={() => handleToggleDone(t.id, true)}
-                        className="flex-1 py-4 rounded-2xl font-black uppercase text-xs border-4 border-slate-300 text-slate-400 hover:bg-slate-50 active:scale-95 transition-all"
+                        onClick={() => handleToggleDone(t.id, activeTab === 'sudah selesai')}
+                        className={`flex-1 py-3 rounded-xl font-black uppercase text-[10px] border-4 transition-all ${activeTab === 'perlu dikerjakan' ? 'border-green-700 text-green-800 hover:bg-green-50' : 'border-slate-300 text-slate-400 hover:bg-slate-100'}`}
                       >
-                        Batal Selesai
+                        {activeTab === 'perlu dikerjakan' ? 'Selesai ✓' : 'Batal'}
                       </button>
-                    )}
+                    </div>
                   </div>
-                </div>
-              )}) : (
-                <div className="py-24 text-center">
-                  <div className="text-6xl mb-4 grayscale opacity-30">📦</div>
-                  <p className="text-slate-300 font-black uppercase italic text-2xl tracking-[0.2em]">Tidak Ada Tugas</p>
-                </div>
-              )}
-            </div>
+                </details>
+              );
+            }) : (
+              <div className="py-24 text-center">
+                <div className="text-6xl mb-4 grayscale opacity-30">📦</div>
+                <p className="text-slate-300 font-black uppercase italic text-2xl tracking-[0.2em]">Kosong</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
