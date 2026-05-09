@@ -24,6 +24,7 @@
     "framer-motion": "^12.38.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.2",
+    "jspdf-autotable": "^5.0.7",
     "lottie-react": "^2.4.1",
     "lucide-react": "^1.8.0",
     "mammoth": "^1.12.0",
