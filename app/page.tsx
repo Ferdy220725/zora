@@ -240,16 +240,17 @@ export default function Dashboard() {
                   const isLocked = currentTime < start;
                   const h = start.getHours().toString().padStart(2, '0');
                   const m = start.getMinutes().toString().padStart(2, '0');
+                  const hari = start.toLocaleDateString('id-ID', { weekday: 'long' });
                   return (
                     <div key={zoom.id} className="p-2 bg-slate-50 rounded-2xl border-2 border-slate-100 text-center">
                       <h4 className="font-black text-slate-800 text-[9px] uppercase leading-tight mb-1 truncate">{zoom.judul}</h4>
                       {isLocked ? (
                         <div className="p-1 bg-slate-200 rounded-lg text-[8px] font-black text-slate-500 uppercase border border-dashed border-slate-300">
-                          🔒 Terkunci s/d {h}:{m}
+                          ⏰ Mulai hari {hari} pukul {h}:{m}
                         </div>
                       ) : (
                         <a href={zoom.link} target="_blank" rel="noopener noreferrer" className="block p-1.5 bg-blue-600 text-white rounded-lg text-[8px] font-black uppercase shadow-md active:scale-95 transition-all">
-                          🎥 Gabung
+                          🎥 Join
                         </a>
                       )}
                     </div>
