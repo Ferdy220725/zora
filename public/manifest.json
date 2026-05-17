@@ -1,0 +1,22 @@
+{
+  "name": "Sistem Informasi Akademik & Jadwal",
+  "short_name": "SiaJadwal",
+  "description": "Aplikasi Pengingat Jadwal Kuliah dan Tugas Teori",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#800020",
+  "theme_color": "#800020",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
