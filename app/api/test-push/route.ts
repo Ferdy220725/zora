@@ -1,21 +1,29 @@
 import { NextResponse } from 'next/server';
 import webpush from 'web-push';
 
-// Masukkan Kunci VAPID yang kita pasang di PwaRegister kemarin
-const vapidKeys = {
-  publicKey: 'BEl62Ohptw1R4albeZ76CJJw7M8as8cH9v1CH368XYZp6v7O8w9aBCDEfGHIjKLMnOpQRStUvWxYz1234567890hijklmn',
-  // Kita isi string acak karena untuk keperluan local push bypass lewat FCM endpoint
-  privateKey: 'U_G_A_N_D_A_S_A_K_T_I_N_Y_A_Z_O_R_A_C_O_P_I_L_O_T_K_E_R_E_N' 
-};
+// 1. Ambil Kunci VAPID dari Environment Variables yang sudah kita set di Vercel
+const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+const privateKey = process.env.VAPID_PRIVATE_KEY;
 
-// Set detail email pengirim (wajib bagi library web-push)
-webpush.setVapidDetails(
-  'mailto:agrotek@zora.com',
-  vapidKeys.publicKey,
-  vapidKeys.privateKey
-);
+// Pengaman: setVapidDetails hanya jalan saat build jika Key-nya valid di server
+if (publicKey && privateKey) {
+  try {
+    webpush.setVapidDetails(
+      'mailto:agrotek@zora.com',
+      publicKey,
+      privateKey
+    );
+  } catch (error) {
+    console.error('Gagal inisialisasi VAPID di test-push saat build:', error);
+  }
+}
 
 export async function GET() {
+  // Validasi darurat saat API ini ditembak (runtime)
+  if (!publicKey || !privateKey) {
+    return NextResponse.json({ error: 'Konfigurasi VAPID tidak ditemukan di server.' }, { status: 500 });
+  }
+
   // Token browser kamu yang diambil langsung dari Supabase tadi
   const tokenBrowserKamu = {
     "keys": {
@@ -37,7 +45,6 @@ export async function GET() {
     return NextResponse.json({ success: true, message: '🚀 BOOM! Notifikasi berhasil ditembak!' });
   } catch (error: any) {
     console.error('Eror nembak push:', error);
-    // Kalau ada kendala sertifikat VAPID di local, kita kasih tahu alasannya
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
