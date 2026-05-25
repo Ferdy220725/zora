@@ -13,76 +13,72 @@ if (publicKey && privateKey) {
   }
 }
 
-// ❌ JANGAN buat "const supabase = createClient(...)" di luar fungsi sini lagi.
-// Kita akan buat di dalam fungsi POST saja agar aman saat runtime!
-
 export async function POST(request: Request) {
   try {
-    // 1. Ambil ENV secara real-time saat API ditembak
+    const body = await request.json().catch(() => ({}));
+    const dataBaru = body.record; // Menangkap baris data baru
+    const namaTabel = body.table;  // Menangkap nama tabel asal dari Webhook Supabase
+
+    if (!dataBaru || !namaTabel) {
+      return NextResponse.json({ message: 'Payload Webhook tidak valid atau kosong.' }, { status: 400 });
+    }
+
+    // 1. KONDISI PINTAR: Sesuaikan teks notifikasi berdasarkan tabel yang bertambah data
+    let judulNotif = "Informasi Baru dari Zora 📢";
+    let isiNotif = "Ada pembaruan data di aplikasi, cek sekarang!";
+
+    if (namaTabel === 'jadwal_kuliah') {
+      judulNotif = `📅 Jadwal Kuliah Baru: ${dataBaru.subject}`;
+      isiNotif = `Hari: ${dataBaru.day} | Jam: ${dataBaru.time}\nRuangan: ${dataBaru.room}`;
+    } 
+    else if (namaTabel === 'tugas_praktikum') {
+      judulNotif = `📝 Tugas Baru: ${dataBaru.judul_tugas}`;
+      isiNotif = `Matkul: ${dataBaru.mk_nama} (Golongan ${dataBaru.golongan})\nDeadline: ${dataBaru.deadline ? new Date(dataBaru.deadline).toLocaleString('id-ID') : 'Cek di aplikasi'}`;
+    } 
+    else if (namaTabel === 'zoom_meetings') {
+      judulNotif = `🎥 Link Zoom Baru: ${dataBaru.judul}`;
+      isiNotif = `Matkul: ${dataBaru.mk_nama || 'Umum'}\nKlik untuk bersiap-siap masuk kelas virtual!`;
+    }
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
 
-    // 2. Validasi darurat jika ENV masih ngambek
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error("❌ Kunci Supabase tidak terbaca di env server!");
-      return NextResponse.json(
-        { error: 'Konfigurasi Environment Variables Supabase (URL/Service Role Key) hilang atau kosong.' }, 
-        { status: 500 }
-      );
-    }
+    // 2. PROSES BACKGROUND: Kirim tanpa bikin database nunggu (Anti-Timeout)
+    (async () => {
+      try {
+        const { data: listUser } = await supabase
+          .from('zora_notifications')
+          .select('subscription_json');
 
-    if (!publicKey || !privateKey) {
-      return NextResponse.json({ error: 'VAPID Key tidak ditemukan di env.' }, { status: 500 });
-    }
+        if (!listUser || listUser.length === 0) return;
 
-    // 3. Buat client Supabase di dalam sini (Aman dari error global crash)
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        const payload = JSON.stringify({
+          title: judulNotif,
+          body: isiNotif,
+          icon: '/favicon.ico', // Memakai favicon yang ada di folder public kamu
+          vibrate: [200, 100, 200]
+        });
 
-    // --- SISA KODE POST DI BAWAHNYA TETAP SAMA ---
-    const body = await request.json().catch(() => ({}));
-    const recordData = body.record || body;
-    const nama_tugas = recordData.nama_tugas || "Ada Tugas Baru!";
-    const deadline = recordData.deadline || "Cek aplikasi sekarang";
+        const kirimNotif = listUser.map(user => {
+          if (!user.subscription_json) return Promise.resolve();
+          const subJson = typeof user.subscription_json === 'string' 
+            ? JSON.parse(user.subscription_json) 
+            : user.subscription_json;
 
-    const { data: users, error: supabaseError } = await supabase
-      .from('zora_notifications')
-      .select('subscription_json');
+          return webpush.sendNotification(subJson, payload)
+            .catch(err => console.error('Token expired/unsubscribed:', err.statusCode));
+        });
 
-    if (supabaseError) {
-      return NextResponse.json({ error: supabaseError.message }, { status: 500 });
-    }
+        await Promise.all(kirimNotif);
+        console.log(`✅ Sukses broadcast notifikasi dari tabel: ${namaTabel}`);
+      } catch (err) {
+        console.error('Gagal memproses background broadcast:', err);
+      }
+    })();
 
-    if (!users || users.length === 0) {
-      return NextResponse.json({ message: 'Tidak ada device terdaftar.' }, { status: 200 });
-    }
-
-    // ... (kode atas tetap sama)
-
-    const payload = JSON.stringify({
-      title: 'Zora: Tugas Baru Dirilis! 📝',
-      body: `Mata Kuliah: ${nama_tugas}. Deadline: ${deadline}.`
-    });
-
-    const pushPromises = users.map(user => {
-      if (!user.subscription_json) return Promise.resolve();
-      const subJson = typeof user.subscription_json === 'string' 
-        ? JSON.parse(user.subscription_json) 
-        : user.subscription_json;
-
-      return webpush.sendNotification(subJson, payload)
-        .catch(err => console.error('Token expired:', err.statusCode));
-    });
-
-    // 🚀 PERUBAHAN UTAMA DI SINI:
-    // Kita langsung kirim respon sukses ke Database Supabase (biar datanya langsung tersimpan)
-    // Tanpa menunggu Promise.all selesai di-await.
-    
-    Promise.all(pushPromises)
-      .then(() => console.log('Semua notifikasi latar belakang selesai dikirim.'))
-      .catch(err => console.error('Error kirim notif massal:', err));
-
-    // Database menerima status 200 ini dalam waktu < 100ms, data zora_tasks langsung AMAN tersimpan!
-    return NextResponse.json({ success: true, message: 'Proses notifikasi dimulai di latar belakang!' });
+    // Respon kilat untuk Supabase (kurang dari 50ms)
+    return NextResponse.json({ success: true, message: `Webhook untuk ${namaTabel} berhasil diterima.` });
 
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
