@@ -106,7 +106,9 @@ export default function SuperAdminPage() {
     else alert("Password Salah!");
   };
 
+  // --- FUNGSI NOTIFIKASI (DIPERBARUI: IN-APP + PUSH NOTIFICATION) ---
   const sendNotification = async (title: string, message: string, category: string) => {
+    // 1. Simpan ke tabel notifications (in-app, muncul saat web dibuka)
     const { error } = await supabase
       .from('notifications')
       .insert([{
@@ -114,6 +116,30 @@ export default function SuperAdminPage() {
         message: message.trim(),
         category: category
       }]);
+
+    if (error) {
+      console.error('Gagal simpan notifikasi in-app:', error.message);
+    }
+
+    // 2. Kirim juga sebagai push notification ke semua subscriber
+    // (muncul walau web ditutup, seperti notifikasi WhatsApp)
+    try {
+      const res = await fetch('/api/send-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title.trim(),
+          body: message.trim(),
+          url: '/'
+        })
+      });
+
+      if (!res.ok) {
+        console.error('Gagal kirim push notification, status:', res.status);
+      }
+    } catch (err) {
+      console.error('Gagal kirim push notification:', err);
+    }
   };
 
   // --- HANDLER VERIFIKASI MAHASISWA (FITUR TERBARU) ---

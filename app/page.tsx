@@ -355,94 +355,145 @@ export default function Dashboard() {
           </div>
 
           <div className="grid grid-cols-1 gap-4">
-            {displayedTugas.length > 0 ? displayedTugas.map((t) => {
-              const isLewat = new Date().getTime() > new Date(t.deadline).getTime();
-              const buktiUser = riwayatBukti[t.id];
+            {activeTab === 'perlu dikerjakan' ? (
+              // --- TAMPILAN TAB DAFTAR TUGAS (MENGGUNAKAN ACCORDION CARDS) ---
+              displayedTugas.length > 0 ? displayedTugas.map((t) => {
+                const isLewat = new Date().getTime() > new Date(t.deadline).getTime();
 
-              return (
-                <details key={t.id} className={`group bg-[#fdfdfd] border-2 rounded-[30px] transition-all overflow-hidden ${isMepet(t.deadline) && activeTab === 'perlu dikerjakan' ? 'border-red-400' : 'border-slate-200'}`}>
-                  <summary className="p-6 cursor-pointer list-none flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="px-2 py-0.5 bg-slate-800 text-white text-[8px] font-black uppercase rounded italic tracking-tighter">{t.mk_nama}</span>
-                        <span className={`text-[9px] font-black uppercase ${isLewat && activeTab === 'perlu dikerjakan' ? 'text-red-600' : isMepet(t.deadline) && activeTab === 'perlu dikerjakan' ? 'text-red-600 animate-pulse' : 'text-slate-400'}`}>
-                          ⏱️ {formatDeadline(t.deadline)}
-                        </span>
-                      </div>
-                      <h3 className={`font-black text-lg md:text-xl uppercase leading-none tracking-tighter ${activeTab === 'sudah selesai' ? 'line-through text-slate-300' : 'text-slate-900'}`}>
-                        {t.judul_tugas}
-                      </h3>
-                    </div>
-                    <div className="text-xl transition-transform group-open:rotate-180 text-slate-300">⬇️</div>
-                  </summary>
-
-                  <div className="p-6 pt-0 border-t-2 border-dashed border-slate-100 bg-slate-50/50">
-                    <div className="py-4">
-                      {isLewat && activeTab === 'perlu dikerjakan' ? (
-                        <div className="p-1 bg-red-700 text-white text-[8px] font-black py-1 px-3 rounded uppercase tracking-widest inline-block">WAKTU HABIS!</div>
-                      ) : isMepet(t.deadline) && activeTab === 'perlu dikerjakan' && (
-                        <div className="p-1 bg-red-600 text-white text-[8px] font-black py-1 px-3 rounded uppercase tracking-widest animate-bounce inline-block">DEADLINE MEPET!</div>
-                      )}
-                      <p className="text-[13px] text-slate-700 font-medium leading-relaxed whitespace-pre-line">{t.deskripsi || 'Tidak ada deskripsi.'}</p>
-                      
-                      {/* RIWAYAT BUKTI PENGUMPULAN DENGAN KOTAK IDENTITAS MAHASISWA */}
-                      {activeTab === 'sudah selesai' && buktiUser && (
-                        <div className="mt-4 p-4 bg-green-50 border-2 border-green-200 rounded-[25px] text-left flex flex-col gap-2">
-                          <p className="text-[9px] font-black text-green-700 uppercase tracking-wider flex items-center gap-1">
-                            🛡️ BUKTI SAH TERDETEKSI SISTEM
-                          </p>
-
-                          {/* KOTAK IDENTITAS DI-GENERATE OTOMATIS */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white/80 border border-green-100 p-3 rounded-2xl text-xs shadow-sm">
-                            <div>
-                              <span className="font-bold text-slate-400 block text-[9px] uppercase tracking-wider">Nama Mahasiswa</span>
-                              <span className="font-black text-slate-800 uppercase">{localStorage.getItem('nama_user_solaria') || 'Sobat Agrotek'}</span>
-                            </div>
-                            <div>
-                              <span className="font-bold text-slate-400 block text-[9px] uppercase tracking-wider">NPM / No. Mahasiswa</span>
-                              <span className="font-mono font-black text-slate-800">{localStorage.getItem('npm_user_solaria') || 'NPM BELUM TERINDIKASI'}</span>
-                            </div>
-                          </div>
-
-                          {/* INFORMASI WAKTU DAN LINK */}
-                          <div className="text-xs font-bold text-slate-600 mt-1 space-y-1">
-                            <p>
-                              Diselesaikan pada: <span className="text-slate-900 font-black">{formatWaktuSelesai(buktiUser.created_at)}</span>
-                            </p>
-                            <a 
-                              href={buktiUser.link_bukti} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="mt-2 inline-block text-xs font-black text-blue-600 underline uppercase hover:text-blue-800 break-all"
-                            >
-                              🔗 Buka Link Bukti Pengumpulan Tugas
-                            </a>
-                          </div>
+                return (
+                  <details key={t.id} className={`group bg-[#fdfdfd] border-2 rounded-[30px] transition-all overflow-hidden ${isMepet(t.deadline) ? 'border-red-400' : 'border-slate-200'}`}>
+                    <summary className="p-6 cursor-pointer list-none flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-0.5 bg-slate-800 text-white text-[8px] font-black uppercase rounded italic tracking-tighter">{t.mk_nama}</span>
+                          <span className={`text-[9px] font-black uppercase ${isLewat ? 'text-red-600' : isMepet(t.deadline) ? 'text-red-600 animate-pulse' : 'text-slate-400'}`}>
+                            ⏱️ {formatDeadline(t.deadline)}
+                          </span>
                         </div>
-                      )}
-                    </div>
+                        <h3 className="font-black text-lg md:text-xl uppercase leading-none tracking-tighter text-slate-900">
+                          {t.judul_tugas}
+                        </h3>
+                      </div>
+                      <div className="text-xl transition-transform group-open:rotate-180 text-slate-300">⬇️</div>
+                    </summary>
 
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      {t.link_pengumpulan && activeTab === 'perlu dikerjakan' && !isLewat && (
-                        <a href={t.link_pengumpulan} target="_blank" rel="noopener noreferrer" className="flex-[2] bg-blue-600 text-white py-3 rounded-xl font-black uppercase text-[10px] text-center shadow-lg active:scale-95 transition-all">
-                          🚀 Kumpulkan Tugas
-                        </a>
-                      )}
-                      <button
-                        onClick={() => handleToggleDone(t.id, activeTab === 'sudah selesai')}
-                        className={`flex-1 py-3 rounded-xl font-black uppercase text-[10px] border-4 transition-all ${activeTab === 'perlu dikerjakan' ? 'border-green-700 text-green-800 hover:bg-green-50' : 'border-slate-300 text-slate-400 hover:bg-slate-100'}`}
-                      >
-                        {activeTab === 'perlu dikerjakan' ? 'Selesai ✓' : 'Batal'}
-                      </button>
+                    <div className="p-6 pt-0 border-t-2 border-dashed border-slate-100 bg-slate-50/50">
+                      <div className="py-4">
+                        {isLewat ? (
+                          <div className="p-1 bg-red-700 text-white text-[8px] font-black py-1 px-3 rounded uppercase tracking-widest inline-block">WAKTU HABIS!</div>
+                        ) : isMepet(t.deadline) && (
+                          <div className="p-1 bg-red-600 text-white text-[8px] font-black py-1 px-3 rounded uppercase tracking-widest animate-bounce inline-block">DEADLINE MEPET!</div>
+                        )}
+                        <p className="text-[13px] text-slate-700 font-medium leading-relaxed whitespace-pre-line">{t.deskripsi || 'Tidak ada deskripsi.'}</p>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        {t.link_pengumpulan && !isLewat && (
+                          <a href={t.link_pengumpulan} target="_blank" rel="noopener noreferrer" className="flex-[2] bg-blue-600 text-white py-3 rounded-xl font-black uppercase text-[10px] text-center shadow-lg active:scale-95 transition-all">
+                            🚀 Kumpulkan Tugas
+                          </a>
+                        )}
+                        <button
+                          onClick={() => handleToggleDone(t.id, false)}
+                          className="flex-1 py-3 rounded-xl font-black uppercase text-[10px] border-4 transition-all border-green-700 text-green-800 hover:bg-green-50"
+                        >
+                          Selesai ✓
+                        </button>
+                      </div>
+                    </div>
+                  </details>
+                );
+              }) : (
+                <div className="py-24 text-center">
+                  <div className="text-6xl mb-4 grayscale opacity-30">📦</div>
+                  <p className="text-slate-300 font-black uppercase italic text-2xl tracking-[0.2em]">Kosong</p>
+                </div>
+              )
+            ) : (
+              // --- TAMPILAN BARU: TAB SUDAH SELESAI (DI-GROUP PER MATA KULIAH) ---
+              (() => {
+                // 1. Kelompokkan tugas yang selesai berdasarkan mk_nama
+                const groupedTugas: Record<string, Tugas[]> = {};
+                
+                tugas.filter(t => completedTaskIds.includes(t.id)).forEach(t => {
+                  if (!groupedTugas[t.mk_nama]) {
+                    groupedTugas[t.mk_nama] = [];
+                  }
+                  groupedTugas[t.mk_nama].push(t);
+                });
+
+                const matkulList = Object.keys(groupedTugas);
+
+                if (matkulList.length === 0) {
+                  return (
+                    <div className="py-24 text-center">
+                      <div className="text-6xl mb-4 grayscale opacity-30">📦</div>
+                      <p className="text-slate-300 font-black uppercase italic text-2xl tracking-[0.2em]">Belum ada tugas selesai</p>
+                    </div>
+                  );
+                }
+
+                // 2. Render List yang rapi per Mata Kuliah
+                return matkulList.map((mkNama) => (
+                  <div key={mkNama} className="mb-6 bg-green-50/40 border-2 border-green-100 rounded-[35px] p-6 shadow-sm">
+                    {/* Header Nama Mata Kuliah */}
+                    <h4 className="text-sm font-black uppercase tracking-wider text-green-800 mb-4 flex items-center gap-2 bg-green-100/60 px-4 py-2 rounded-full w-fit">
+                      📚 Matkul: {mkNama} 
+                      <span className="bg-green-700 text-white text-[10px] px-2 py-0.5 rounded-full">
+                        {groupedTugas[mkNama].length} Tugas
+                      </span>
+                    </h4>
+
+                    {/* Tabel / List Tugas di dalam matkul tersebut */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b-2 border-green-200 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                            <th className="pb-3 pl-2">Judul Tugas</th>
+                            <th className="pb-3">Waktu Selesai (Sistem)</th>
+                            <th className="pb-3 text-center">Aksi / Link</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {groupedTugas[mkNama].map((t) => {
+                            const buktiUser = riwayatBukti[t.id];
+                            return (
+                              <tr key={t.id} className="text-xs font-medium text-slate-700 hover:bg-white/80 transition-all">
+                                <td className="py-3 pl-2 font-bold text-slate-800 uppercase max-w-[200px] truncate">
+                                  {t.judul_tugas}
+                                </td>
+                                <td className="py-3 text-slate-500 font-mono">
+                                  {buktiUser ? formatWaktuSelesai(buktiUser.created_at) : "-"}
+                                </td>
+                                <td className="py-3 text-center">
+                                  <div className="flex justify-center gap-2">
+                                    {buktiUser && (
+                                      <a 
+                                        href={buktiUser.link_bukti} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer" 
+                                        className="bg-blue-600 text-white font-black uppercase text-[9px] px-3 py-1.5 rounded-xl hover:bg-blue-700 tracking-tighter"
+                                      >
+                                        🔗 Lihat Bukti
+                                      </a>
+                                    )}
+                                    <button
+                                      onClick={() => handleToggleDone(t.id, true)}
+                                      className="border-2 border-red-200 text-red-600 font-black uppercase text-[9px] px-2 py-1 rounded-xl hover:bg-red-50"
+                                    >
+                                      Batal
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
-                </details>
-              );
-            }) : (
-              <div className="py-24 text-center">
-                <div className="text-6xl mb-4 grayscale opacity-30">📦</div>
-                <p className="text-slate-300 font-black uppercase italic text-2xl tracking-[0.2em]">Kosong</p>
-              </div>
+                ));
+              })()
             )}
           </div>
         </div>

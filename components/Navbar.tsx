@@ -11,22 +11,41 @@ import {
   Menu,
   X,
   Sprout,
-  CalendarDays 
+  CalendarDays,
+  Bell,
+  BellRing,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { subscribeUser, getNotificationStatus } from "@/lib/push";
 
 export default function Navbar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [shouldShow, setShouldShow] = useState(false);
+  const [notifActive, setNotifActive] = useState(false);
+  const [notifLoading, setNotifLoading] = useState(false);
 
   useEffect(() => {
-    // Karena gerbang verifikasi di page.tsx sudah dihapus, 
-    // menu navigasi sekarang HARUS selalu muncul di semua halaman.
     setShouldShow(true);
   }, [pathname]);
 
+  useEffect(() => {
+    getNotificationStatus().then(setNotifActive);
+  }, []);
+
   if (!shouldShow) return null;
+
+  const handleNotifClick = async () => {
+    if (notifActive) return; // sudah aktif, nggak perlu apa-apa
+    setNotifLoading(true);
+    const result = await subscribeUser();
+    setNotifLoading(false);
+    if (result.success) {
+      setNotifActive(true);
+    } else {
+      alert("Gagal mengaktifkan notifikasi. Coba lagi atau cek izin browser kamu.");
+    }
+  };
 
   const menuItems = [
     { id: "m1", name: "Home", href: "/", icon: <LayoutDashboard size={20} /> },
@@ -38,7 +57,7 @@ export default function Navbar() {
       name: "Pertanian Perkotaan",
       href: "https://pertanian-perkotaan-c.vercel.app/",
       icon: <Sprout size={20} />,
-      isExternal: true
+      isExternal: true,
     },
     { id: "m4", name: "Izin", href: "/perizinan", icon: <FileText size={20} /> },
     { id: "m5", name: "Admin", href: "/admin", icon: <UserCog size={20} /> },
@@ -46,11 +65,31 @@ export default function Navbar() {
 
   return (
     <div className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-[9999] flex flex-col items-end gap-3 pointer-events-none">
-      
-      {/* Menu List */}
-      <div className={`flex flex-col gap-2 mb-2 transition-all duration-300 transform origin-bottom ${
-        isOpen ? "scale-100 opacity-100 translate-y-0 pointer-events-auto" : "scale-0 opacity-0 translate-y-10 pointer-events-none"
-      }`}>
+      <div
+        className={`flex flex-col gap-2 mb-2 transition-all duration-300 transform origin-bottom ${
+          isOpen
+            ? "scale-100 opacity-100 translate-y-0 pointer-events-auto"
+            : "scale-0 opacity-0 translate-y-10 pointer-events-none"
+        }`}
+      >
+        {/* Tombol Notifikasi */}
+        <button
+          onClick={handleNotifClick}
+          disabled={notifLoading || notifActive}
+          className={`flex items-center justify-end gap-3 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-md border pointer-events-auto ${
+            notifActive
+              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+              : "bg-white/95 dark:bg-[#1a1a1a]/90 text-slate-600 dark:text-slate-300 border-slate-100 dark:border-white/10"
+          }`}
+        >
+          <span className="text-[10px] font-black uppercase tracking-widest">
+            {notifLoading ? "Memproses..." : notifActive ? "Notifikasi Aktif" : "Aktifkan Notifikasi"}
+          </span>
+          <div className="p-1 rounded-lg text-inherit bg-slate-50/50 dark:bg-white/5">
+            {notifActive ? <BellRing size={20} /> : <Bell size={20} />}
+          </div>
+        </button>
+
         {menuItems.map((item) => (
           <Link
             key={item.id}
@@ -66,13 +105,12 @@ export default function Navbar() {
           >
             <span className="text-[10px] font-black uppercase tracking-widest">{item.name}</span>
             <div className={`p-1 rounded-lg text-inherit ${item.isExternal ? "bg-emerald-50 text-emerald-600" : "bg-slate-50/50 dark:bg-white/5"}`}>
-                {item.icon}
+              {item.icon}
             </div>
           </Link>
         ))}
       </div>
 
-      {/* Tombol Utama */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`w-14 h-14 md:w-16 md:h-16 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 pointer-events-auto active:scale-90 ${
