@@ -4,8 +4,6 @@ import "./globals.css";
 import { Toaster } from 'sonner';
 import Navbar from "@/components/Navbar";
 import ThemeEngine from "@/components/ThemeEngine";
-import ChatBot from "@/components/ChatBot"; // Asisten AI Zora
-import PwaRegister from "@/components/PwaRegister"; // <-- Menggunakan komponen client yang aman
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,9 +35,6 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased transition-colors duration-700 bg-white dark:bg-[#0a0a0a] text-slate-900 dark:text-white`}
       >
-        {/* Melakukan registrasi Service Worker secara aman di background client */}
-        <PwaRegister />
-
         {/* Komponen Inti Zora System */}
         <ThemeEngine />
         <Navbar />
@@ -49,9 +44,6 @@ export default function RootLayout({
         </main>
 
         <Toaster position="top-center" richColors theme="system" />
-        
-        {/* Fitur Asisten AI Zora Copilot */}
-        <ChatBot />
       </body>
     </html>
   );

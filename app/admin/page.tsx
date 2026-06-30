@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '../../utils/supabase/client';
 import { jsPDF } from "jspdf";
+import { sendTelegramNotification } from '../actions/telegram';
 
 export default function SuperAdminPage() {
   const [role, setRole] = useState<'GUEST' | 'WEB' | 'ABSEN'>('GUEST');
@@ -35,7 +36,7 @@ export default function SuperAdminPage() {
   const [linkPrak, setLinkPrak] = useState('');
   const [deadlinePrak, setDeadlinePrak] = useState('');
   const [deskripsiPrak, setDeskripsiPrak] = useState('');
-  
+
   const [judulKuliah, setJudulKuliah] = useState('');
   const [mkKuliah, setMkKuliah] = useState('');
   const [deadlineKuliah, setDeadlineKuliah] = useState('');
@@ -53,6 +54,19 @@ export default function SuperAdminPage() {
     return `${dateString}:00+07:00`;
   };
 
+  // Helper kecil khusus untuk format tampilan tanggal di pesan Telegram
+  const formatTanggalTampil = (dateString: string) => {
+    if (!dateString) return "-";
+    try {
+      return new Date(`${dateString}:00+07:00`).toLocaleString('id-ID', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
   const fetchData = async () => {
     const sekarang = new Date();
 
@@ -60,7 +74,7 @@ export default function SuperAdminPage() {
       const { data: dIzin } = await supabase.from('perizinan').select('*').order('created_at', { ascending: false });
       const { data: dPrak } = await supabase.from('tugas_praktikum').select('*').order('deadline', { ascending: true });
       const { data: dKuliah } = await supabase.from('tugas_perkuliahan').select('*').order('deadline', { ascending: true });
-      
+
       // --- FETCH DATA VERIFIKASI MAHASISWA (FITUR TERBARU) ---
       const { data: dProfiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
       if (dProfiles) setProfiles(dProfiles);
@@ -70,7 +84,7 @@ export default function SuperAdminPage() {
       if (dZoomRaw) setZoomMeetings(dZoomRaw);
 
       if (dIzin) setIzins(dIzin);
-      
+
       if (dPrak) {
         const prakAktif = dPrak.filter((t) => {
           const tglDeadline = new Date(t.deadline);
@@ -106,42 +120,6 @@ export default function SuperAdminPage() {
     else alert("Password Salah!");
   };
 
-  // --- FUNGSI NOTIFIKASI (DIPERBARUI: IN-APP + PUSH NOTIFICATION) ---
-  const sendNotification = async (title: string, message: string, category: string) => {
-    // 1. Simpan ke tabel notifications (in-app, muncul saat web dibuka)
-    const { error } = await supabase
-      .from('notifications')
-      .insert([{
-        title: title.trim(),
-        message: message.trim(),
-        category: category
-      }]);
-
-    if (error) {
-      console.error('Gagal simpan notifikasi in-app:', error.message);
-    }
-
-    // 2. Kirim juga sebagai push notification ke semua subscriber
-    // (muncul walau web ditutup, seperti notifikasi WhatsApp)
-    try {
-      const res = await fetch('/api/send-notification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: title.trim(),
-          body: message.trim(),
-          url: '/'
-        })
-      });
-
-      if (!res.ok) {
-        console.error('Gagal kirim push notification, status:', res.status);
-      }
-    } catch (err) {
-      console.error('Gagal kirim push notification:', err);
-    }
-  };
-
   // --- HANDLER VERIFIKASI MAHASISWA (FITUR TERBARU) ---
   const handleApproveStudent = async (id: string, nama: string, statusSaatIni: boolean) => {
     const targetStatus = !statusSaatIni;
@@ -152,6 +130,14 @@ export default function SuperAdminPage() {
 
     if (!error) {
       alert(`Status verifikasi ${nama} berhasil diubah menjadi ${targetStatus ? 'TERVERIFIKASI' : 'BELUM ACC'}!`);
+
+      // Notifikasi Telegram: verifikasi mahasiswa
+      sendTelegramNotification(
+        `👤 <b>VERIFIKASI MAHASISWA</b>\n` +
+        `Nama: <b>${nama}</b>\n` +
+        `Status: <b>${targetStatus ? 'TERVERIFIKASI ✅' : 'DIBATALKAN ❌'}</b>`
+      );
+
       fetchData();
     } else {
       alert("Gagal memperbarui status: " + error.message);
@@ -175,7 +161,7 @@ export default function SuperAdminPage() {
     if (!zoomJudul || !zoomLink || !zoomWaktu || !zoomWaktuSelesai) {
       return alert("Isi Judul, Link, Waktu Mulai & Selesai!");
     }
-    
+
     const { error } = await supabase.from('zoom_meetings').insert([{
       judul: zoomJudul.trim(),
       link: zoomLink.trim(),
@@ -185,8 +171,17 @@ export default function SuperAdminPage() {
     }]);
 
     if (!error) {
-      await sendNotification("🎥 Jadwal Zoom Baru", `${zoomJudul}`, "zoom");
       alert("Jadwal Zoom Berhasil Ditambahkan!");
+
+      // Notifikasi Telegram: jadwal zoom baru
+      sendTelegramNotification(
+        `🎥 <b>JADWAL ZOOM BARU</b>\n` +
+        `Judul: <b>${zoomJudul.trim()}</b>\n` +
+        `Mulai: ${formatTanggalTampil(zoomWaktu)}\n` +
+        `Selesai: ${formatTanggalTampil(zoomWaktuSelesai)}\n` +
+        `Link: ${zoomLink.trim()}`
+      );
+
       setZoomJudul(''); setZoomLink(''); setZoomWaktu(''); setZoomWaktuSelesai('');
       fetchData();
     } else {
@@ -200,7 +195,7 @@ export default function SuperAdminPage() {
   };
 
   const handlePostTugasKuliah = async () => {
-    if(!judulKuliah || !deadlineKuliah) return alert("Isi Judul & Deadline!");
+    if (!judulKuliah || !deadlineKuliah) return alert("Isi Judul & Deadline!");
     const { error } = await supabase.from('tugas_perkuliahan').insert([{
       judul_tugas: judulKuliah.trim(),
       mk_nama: mkKuliah.trim(),
@@ -210,15 +205,24 @@ export default function SuperAdminPage() {
     }]);
 
     if (!error) {
-      await sendNotification("📝 Tugas Teori Baru", `${mkKuliah.trim()}: ${judulKuliah.trim()}`, "tugas_teori");
       alert("Tugas Kuliah Terbit!");
+
+      // Notifikasi Telegram: tugas perkuliahan baru
+      sendTelegramNotification(
+        `📚 <b>TUGAS PERKULIAHAN BARU</b>\n` +
+        `Matkul: <b>${mkKuliah.trim() || "-"}</b>\n` +
+        `Judul: ${judulKuliah.trim()}\n` +
+        `Deadline: ${formatTanggalTampil(deadlineKuliah)}` +
+        (linkKuliah.trim() ? `\nLink: ${linkKuliah.trim()}` : '')
+      );
+
       setJudulKuliah(''); setMkKuliah(''); setDeadlineKuliah(''); setDeskripsiKuliah(''); setLinkKuliah('');
       fetchData();
     }
   };
 
   const handlePostTugasPrak = async () => {
-    if(!judulPrak || !deadlinePrak) return alert("Isi Judul & Deadline!");
+    if (!judulPrak || !deadlinePrak) return alert("Isi Judul & Deadline!");
     const { error } = await supabase.from('tugas_praktikum').insert([{
       judul_tugas: judulPrak.trim(),
       mk_nama: mkPrak.trim().toUpperCase(),
@@ -229,8 +233,17 @@ export default function SuperAdminPage() {
     }]);
 
     if (!error) {
-      await sendNotification("🔬 Tugas Praktikum Baru", `${mkPrak}: ${judulPrak.trim()} (GOL ${golongan})`, "tugas_praktikum");
       alert("Tugas Praktikum Terbit!");
+
+      // Notifikasi Telegram: tugas praktikum baru
+      sendTelegramNotification(
+        `🧪 <b>TUGAS PRAKTIKUM BARU</b>\n` +
+        `Matkul: <b>${mkPrak.trim().toUpperCase()}</b> (Gol. ${golongan.trim().toUpperCase()})\n` +
+        `Judul: ${judulPrak.trim()}\n` +
+        `Deadline: ${formatTanggalTampil(deadlinePrak)}` +
+        (linkPrak.trim() ? `\nLink: ${linkPrak.trim()}` : '')
+      );
+
       setJudulPrak('');
       setLinkPrak('');
       setDeskripsiPrak('');
@@ -238,59 +251,63 @@ export default function SuperAdminPage() {
     }
   };
 
- const handleUploadMateri = async () => {
-  // 1. Validasi Input Lengkap
-  if (!file) return alert("Silakan pilih file terlebih dahulu!");
-  if (!judulMateri.trim()) return alert("Judul materi tidak boleh kosong!");
-  if (!mkMateri.trim()) return alert("Nama Mata Kuliah tidak boleh kosong!");
-  if (!semesterMateri) return alert("Semester harus diisi!");
+  const handleUploadMateri = async () => {
+    if (!file) return alert("Silakan pilih file terlebih dahulu!");
+    if (!judulMateri.trim()) return alert("Judul materi tidak boleh kosong!");
+    if (!mkMateri.trim()) return alert("Nama Mata Kuliah tidak boleh kosong!");
+    if (!semesterMateri) return alert("Semester harus diisi!");
 
-  try {
-    // 2. Proses Upload ke Supabase Storage Bucket 'uploads'
-    const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
-    const { error: storageError } = await supabase.storage
-      .from('uploads')
-      .upload(fileName, file);
+    try {
+      const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+      const { error: storageError } = await supabase.storage
+        .from('uploads')
+        .upload(fileName, file);
 
-    if (storageError) {
-      console.error("Storage Error:", storageError);
-      return alert("Gagal Upload File ke Storage: " + storageError.message);
+      if (storageError) {
+        console.error("Storage Error:", storageError);
+        return alert("Gagal Upload File ke Storage: " + storageError.message);
+      }
+
+      const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(fileName);
+      if (!urlData?.publicUrl) {
+        return alert("Gagal mendapatkan URL file dari storage.");
+      }
+
+      const { error: dbError } = await supabase.from('materi').insert([{
+        judul: judulMateri.trim(),
+        file_url: urlData.publicUrl,
+        mk_nama: mkMateri.trim(),
+        semester: parseInt(semesterMateri)
+      }]);
+
+      if (dbError) {
+        console.error("Database Error:", dbError);
+        return alert("File terupload, tapi GAGAL simpan ke Database: " + dbError.message);
+      }
+
+      alert("Materi Berhasil Diunggah dan Disimpan!");
+
+      // Notifikasi Telegram: materi baru
+      sendTelegramNotification(
+        `📄 <b>MATERI BARU DIUNGGAH</b>\n` +
+        `Matkul: <b>${mkMateri.trim()}</b>\n` +
+        `Judul: ${judulMateri.trim()}\n` +
+        `Semester: ${semesterMateri}\n` +
+        `Link: ${urlData.publicUrl}`
+      );
+
+      setJudulMateri('');
+      setMkMateri('');
+      setSemesterMateri('');
+      setFile(null);
+
+      if (typeof fetchData === 'function') fetchData();
+
+    } catch (err: any) {
+      console.error("Crash Error:", err);
+      alert("Terjadi kesalahan sistem: " + err.message);
     }
-
-    // 3. Ambil Public URL File yang diunggah
-    const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(fileName);
-    if (!urlData?.publicUrl) {
-      return alert("Gagal mendapatkan URL file dari storage.");
-    }
-
-    // 4. Input Data ke Tabel 'materi'
-    const { error: dbError } = await supabase.from('materi').insert([{
-      judul: judulMateri.trim(),
-      file_url: urlData.publicUrl,
-      mk_nama: mkMateri.trim(),
-      semester: parseInt(semesterMateri)
-    }]);
-    
-    if (dbError) {
-      console.error("Database Error:", dbError);
-      return alert("File terupload, tapi GAGAL simpan ke Database: " + dbError.message);
-    }
-
-    // 5. Jika Semua Berhasil
-    alert("Materi Berhasil Diunggah dan Disimpan!");
-    setJudulMateri(''); 
-    setMkMateri(''); 
-    setSemesterMateri(''); 
-    setFile(null);
-    
-    // Refresh data jika diperlukan
-    if (typeof fetchData === 'function') fetchData();
-
-  } catch (err: any) {
-    console.error("Crash Error:", err);
-    alert("Terjadi kesalahan sistem: " + err.message);
-  }
-};
+  };
 
   const deleteData = async (id: any, table: string) => {
     if (confirm("Hapus data ini?")) {
@@ -342,15 +359,28 @@ export default function SuperAdminPage() {
     const { error } = await supabase.from('status_sistem').update({ is_active: status }).eq('id', 'absensi');
     if (!error) {
       setAbsensiEnabled(status);
-      const msg = status ? "Pintu absensi sekarang DIBUKA. Segera absen!" : "Pintu absensi sudah DITUTUP.";
-      await sendNotification(status ? "✅ Absensi Dibuka" : "❌ Absensi Ditutup", msg, "absensi");
+
+      // Notifikasi Telegram: status absensi diubah
+      sendTelegramNotification(
+        `🚪 <b>STATUS ABSENSI DIUBAH</b>\n` +
+        `Status: <b>${status ? 'DIBUKA ✅' : 'DITUTUP ❌'}</b>`
+      );
+
       fetchData();
     }
   };
 
   const updateKodeAbsen = async () => {
     const { error } = await supabase.from('status_sistem').update({ kode_akses: kodeAbsen.toUpperCase() }).eq('id', 'absensi');
-    if (!error) alert("Kode Absen Berhasil Diperbarui!");
+    if (!error) {
+      alert("Kode Absen Berhasil Diperbarui!");
+
+      // Notifikasi Telegram: kode absen diperbarui
+      sendTelegramNotification(
+        `🔑 <b>KODE ABSEN DIPERBARUI</b>\n` +
+        `Kode baru: <code>${kodeAbsen.toUpperCase()}</code>`
+      );
+    }
   };
 
   const hitungTotalPerTanggal = () => {
@@ -381,7 +411,7 @@ export default function SuperAdminPage() {
 
       {role === 'WEB' ? (
         <div className="space-y-10">
-          
+
           {/* MANAJEMEN ZOOM (UPDATED: SERVER-SIDE AUTO DELETE) */}
           <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 rounded-[35px] shadow-lg text-white border-b-8 border-blue-900">
             <h2 className="font-black mb-4 uppercase text-xs flex items-center gap-2"><span>🎥</span> KONTROL JADWAL ZOOM MEETING</h2>
@@ -456,10 +486,10 @@ export default function SuperAdminPage() {
               <h2 className="font-black mb-4 text-slate-700 uppercase text-xs">3. Upload Materi</h2>
               <input type="text" placeholder="Matkul" className="w-full border p-3 mb-2 rounded-xl text-xs text-black" value={mkMateri} onChange={e => setMkMateri(e.target.value)} />
               <input type="text" placeholder="Judul Materi" className="w-full border p-3 mb-2 rounded-xl text-xs text-black" value={judulMateri} onChange={e => setJudulMateri(e.target.value)} />
-              
+
               {/* Tambahan Input Semester Baru */}
               <input type="number" placeholder="Semester (Contoh: 3)" className="w-full border p-3 mb-2 rounded-xl text-xs text-black font-bold focus:border-[#800020] outline-none" value={semesterMateri} onChange={e => setSemesterMateri(e.target.value)} min="1" />
-              
+
               <input type="file" className="w-full mb-4 text-[10px] text-black" onChange={e => setFile(e.target.files?.[0] || null)} />
               <button onClick={handleUploadMateri} className="w-full bg-[#800020] text-white py-3 rounded-xl font-black text-xs shadow-md">UPLOAD</button>
             </div>

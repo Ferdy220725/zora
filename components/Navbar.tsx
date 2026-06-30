@@ -12,40 +12,19 @@ import {
   X,
   Sprout,
   CalendarDays,
-  Bell,
-  BellRing,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { subscribeUser, getNotificationStatus } from "@/lib/push";
 
 export default function Navbar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [shouldShow, setShouldShow] = useState(false);
-  const [notifActive, setNotifActive] = useState(false);
-  const [notifLoading, setNotifLoading] = useState(false);
 
   useEffect(() => {
     setShouldShow(true);
   }, [pathname]);
 
-  useEffect(() => {
-    getNotificationStatus().then(setNotifActive);
-  }, []);
-
   if (!shouldShow) return null;
-
-  const handleNotifClick = async () => {
-    if (notifActive) return; // sudah aktif, nggak perlu apa-apa
-    setNotifLoading(true);
-    const result = await subscribeUser();
-    setNotifLoading(false);
-    if (result.success) {
-      setNotifActive(true);
-    } else {
-      alert("Gagal mengaktifkan notifikasi. Coba lagi atau cek izin browser kamu.");
-    }
-  };
 
   const menuItems = [
     { id: "m1", name: "Home", href: "/", icon: <LayoutDashboard size={20} /> },
@@ -72,24 +51,6 @@ export default function Navbar() {
             : "scale-0 opacity-0 translate-y-10 pointer-events-none"
         }`}
       >
-        {/* Tombol Notifikasi */}
-        <button
-          onClick={handleNotifClick}
-          disabled={notifLoading || notifActive}
-          className={`flex items-center justify-end gap-3 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-md border pointer-events-auto ${
-            notifActive
-              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-              : "bg-white/95 dark:bg-[#1a1a1a]/90 text-slate-600 dark:text-slate-300 border-slate-100 dark:border-white/10"
-          }`}
-        >
-          <span className="text-[10px] font-black uppercase tracking-widest">
-            {notifLoading ? "Memproses..." : notifActive ? "Notifikasi Aktif" : "Aktifkan Notifikasi"}
-          </span>
-          <div className="p-1 rounded-lg text-inherit bg-slate-50/50 dark:bg-white/5">
-            {notifActive ? <BellRing size={20} /> : <Bell size={20} />}
-          </div>
-        </button>
-
         {menuItems.map((item) => (
           <Link
             key={item.id}
