@@ -12,6 +12,7 @@ import {
   X,
   Sprout,
   CalendarDays,
+  MonitorPlay,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -31,6 +32,7 @@ export default function Navbar() {
     { id: "m2", name: "Materi", href: "/materi", icon: <BookOpen size={20} /> },
     { id: "m3", name: "Praktikum", href: "/praktikum", icon: <FlaskConical size={20} /> },
     { id: "m_jadwal", name: "Jadwal", href: "/jadwal-sistem/list", icon: <CalendarDays size={20} /> },
+    { id: "m_presentasi", name: "Presentasi", href: "/presentasi", icon: <MonitorPlay size={20} /> },
     {
       id: "m_ext",
       name: "Pertanian Perkotaan",

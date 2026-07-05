@@ -24,6 +24,14 @@ async function replyTelegram(chatId: number | string, text: string) {
   );
 }
 
+// ── Helper: kirim pesan panjang (split biar nggak kena limit 4096 char Telegram) ─
+async function replyTelegramLong(chatId: number | string, text: string) {
+  const CHUNK = 3800;
+  for (let i = 0; i < text.length; i += CHUNK) {
+    await replyTelegram(chatId, text.slice(i, i + CHUNK));
+  }
+}
+
 // ── Helper: format tanggal ke WIB ─────────────────────────────────────────
 function formatWIB(dateString: string) {
   if (!dateString) return "-";
@@ -34,6 +42,60 @@ function formatWIB(dateString: string) {
       timeStyle: "short",
     });
   } catch { return dateString; }
+}
+
+// ── Helper: cek & tambah kuota AI harian (default limit 100x/hari) ─────────
+async function checkAndIncrementQuota(limit = 100): Promise<boolean> {
+  const today = new Date().toISOString().split("T")[0];
+
+  const { data } = await supabase
+    .from("ai_usage_log")
+    .select("jumlah")
+    .eq("tanggal", today)
+    .maybeSingle();
+
+  const current = data?.jumlah || 0;
+  if (current >= limit) return false;
+
+  await supabase
+    .from("ai_usage_log")
+    .upsert({ tanggal: today, jumlah: current + 1 });
+
+  return true;
+}
+
+// ── Helper: panggil Gemini Flash (GRATIS) ──────────────────────────────────
+async function callGemini(systemPrompt: string, userPrompt: string): Promise<string> {
+  const model = "gemini-2.5-flash"; // cek AI Studio kalau ada model gratis versi lebih baru
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          generationConfig: { maxOutputTokens: 1500, temperature: 0.7 },
+        }),
+      }
+    );
+    const data = await res.json();
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  } catch (err) {
+    console.error("[Gemini Error]", err);
+    return "";
+  }
+}
+
+// ── Helper: panggil Gemini dengan retry (jaga-jaga kena limit per menit) ───
+async function callGeminiWithRetry(systemPrompt: string, userPrompt: string, retries = 2): Promise<string> {
+  for (let i = 0; i <= retries; i++) {
+    const result = await callGemini(systemPrompt, userPrompt);
+    if (result) return result;
+    await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
+  }
+  return "⚠️ AI sedang sibuk, coba lagi beberapa saat lagi ya.";
 }
 
 // ── Logic: Cron Job Harian Gabungan (Pengingat Tugas + Cek Siamik) ─────────
@@ -49,7 +111,6 @@ async function handleCronHarian() {
     const now = new Date();
 
     // ── BAGIAN 1: PENGINGAT TUGAS OTOMATIS ──
-    // Ambil tugas perkuliahan aktif terdekat
     const { data: tugasKuliah } = await supabase
       .from("tugas_perkuliahan")
       .select("*")
@@ -67,14 +128,14 @@ async function handleCronHarian() {
 
     // ── BAGIAN 2: JALUR CEK INFO SIAMIK ──
     const { data: infoSiamik, error: siamikErr } = await supabase
-      .from("siamik_news") // Sesuaikan dengan nama tabel Siamik milikmu
+      .from("siamik_news")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (!siamikErr && infoSiamik && !infoSiamik.sudah_dikirim) {
-      const pesanSiamik = 
+      const pesanSiamik =
         `🔔 <b>INFO TERBARU SIAMIK HARI INI</b> 🔔\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
         `📌 <b>Judul:</b> ${infoSiamik.judul}\n` +
@@ -82,10 +143,9 @@ async function handleCronHarian() {
         `📝 <b>Isi Pengumuman:</b>\n${infoSiamik.isi_pengumuman || "-"}\n\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
         `👉 <i>Silakan cek akun Siamik masing-masing untuk info lebih lanjut!</i>`;
-      
+
       await replyTelegram(TARGET_CHAT_ID, pesanSiamik);
 
-      // Tandai di database agar tidak terjadi spam info yang sama keesokan harinya
       await supabase
         .from("siamik_news")
         .update({ sudah_dikirim: true })
@@ -106,6 +166,8 @@ async function handleHelp(chatId: number | string) {
     `/jadwal — Jadwal Zoom aktif\n` +
     `/materi — 10 materi terbaru\n` +
     `/materi [kata kunci] — Cari materi (mk/judul)\n` +
+    `/ringkas [kata kunci] — Ringkasan materi (AI)\n` +
+    `/soal [kata kunci] — Soal latihan dari materi (AI)\n` +
     `/tugas — Semua tugas aktif (kuliah + praktikum)\n` +
     `/tugaskuliah — Tugas perkuliahan saja\n` +
     `/tugasprak — Tugas praktikum saja\n` +
@@ -191,10 +253,69 @@ async function handleMateri(chatId: number | string, keyword: string) {
   await replyTelegram(chatId, text);
 }
 
+// ── Command: /ringkas [kata kunci] ─────────────────────────────────────────
+async function handleRingkas(chatId: number | string, keyword: string) {
+  if (!keyword) {
+    await replyTelegram(chatId, "💡 Format: /ringkas [kata kunci materi]\nContoh: /ringkas kalkulus1");
+    return;
+  }
+
+  const { data: materi } = await supabase
+    .from("materi")
+    .select("*")
+    .or(`judul.ilike.%${keyword}%,mk_nama.ilike.%${keyword}%`)
+    .limit(1)
+    .maybeSingle();
+
+  if (!materi) { await replyTelegram(chatId, `📭 Materi "<b>${keyword}</b>" tidak ditemukan.`); return; }
+  if (!materi.konten_teks) { await replyTelegram(chatId, `⚠️ Materi ini belum punya teks untuk diringkas. Hubungi admin.`); return; }
+
+  const allowed = await checkAndIncrementQuota(100);
+  if (!allowed) { await replyTelegram(chatId, "🚫 Kuota AI harian bot sudah habis. Coba lagi besok."); return; }
+
+  await replyTelegram(chatId, "⏳ Sedang meringkas materi, tunggu sebentar...");
+
+  const summary = await callGeminiWithRetry(
+    "Kamu adalah asisten akademik. Ringkas materi kuliah berikut secara detail dan terstruktur: poin-poin utama, definisi penting, dan contoh jika ada. Gunakan bahasa Indonesia yang jelas, format dengan heading dan bullet point.",
+    `Judul: ${materi.judul}\nMata Kuliah: ${materi.mk_nama}\n\nIsi materi:\n${materi.konten_teks}`
+  );
+
+  await replyTelegramLong(chatId, `📘 <b>RINGKASAN: ${materi.judul}</b>\n\n${summary}`);
+}
+
+// ── Command: /soal [kata kunci] ────────────────────────────────────────────
+async function handleSoal(chatId: number | string, keyword: string) {
+  if (!keyword) {
+    await replyTelegram(chatId, "💡 Format: /soal [kata kunci materi]\nContoh: /soal kalkulus1");
+    return;
+  }
+
+  const { data: materi } = await supabase
+    .from("materi")
+    .select("*")
+    .or(`judul.ilike.%${keyword}%,mk_nama.ilike.%${keyword}%`)
+    .limit(1)
+    .maybeSingle();
+
+  if (!materi) { await replyTelegram(chatId, `📭 Materi "<b>${keyword}</b>" tidak ditemukan.`); return; }
+  if (!materi.konten_teks) { await replyTelegram(chatId, `⚠️ Materi ini belum punya teks untuk dibuatkan soal. Hubungi admin.`); return; }
+
+  const allowed = await checkAndIncrementQuota(100);
+  if (!allowed) { await replyTelegram(chatId, "🚫 Kuota AI harian bot sudah habis. Coba lagi besok."); return; }
+
+  await replyTelegram(chatId, "⏳ Sedang membuat soal latihan, tunggu sebentar...");
+
+  const soal = await callGeminiWithRetry(
+    "Kamu adalah dosen yang membuat soal latihan. Buat 5 soal beragam dari materi berikut: campuran pilihan ganda (dengan 4 opsi dan jawaban benar ditandai) dan essay singkat. Sertakan kunci jawaban di akhir, terpisah dari soal.",
+    `Judul: ${materi.judul}\nMata Kuliah: ${materi.mk_nama}\n\nIsi materi:\n${materi.konten_teks}`
+  );
+
+  await replyTelegramLong(chatId, `📝 <b>SOAL LATIHAN: ${materi.judul}</b>\n\n${soal}`);
+}
+
 // ── Main POST Handler ──────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
-    // PROTEKSI & LOGIKA INTERSEPSI UNTUK CRON JOB VERCEL VIA POST REQUEST
     const { searchParams } = new URL(req.url);
     if (searchParams.get("cron") === "all_tasks") {
       await handleCronHarian();
@@ -235,6 +356,12 @@ export async function POST(req: NextRequest) {
       case "/materi":
         await handleMateri(chatId, args);
         break;
+      case "/ringkas":
+        await handleRingkas(chatId, args);
+        break;
+      case "/soal":
+        await handleSoal(chatId, args);
+        break;
       case "/materi_cari":
         await replyTelegram(chatId, "💡 Tips: Ketik /materi [kata kunci] untuk mencari materi.");
         break;
@@ -250,14 +377,13 @@ export async function POST(req: NextRequest) {
 }
 
 // ── Main GET Handler ───────────────────────────────────────────────────────
-export async function GET(req: NextRequest) { 
+export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  
-  // Deteksi jika Cron Job dipanggil menggunakan metode GET
+
   if (searchParams.get("cron") === "all_tasks") {
     await handleCronHarian();
     return NextResponse.json({ status: "Cron Job harian sukses diproses via GET ✅" });
   }
 
-  return NextResponse.json({ status: "Webhook aktif ✅" }); 
+  return NextResponse.json({ status: "Webhook aktif ✅" });
 }
