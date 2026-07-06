@@ -3,20 +3,26 @@
 import React, { useState, useEffect, useRef, use } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { channelName, EVENT_NAME, PresentasiEvent } from "@/lib/presentasiChannel";
-import { ChevronLeft, ChevronRight, Radar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Radar, NotebookPen, Check } from "lucide-react";
 
 export default function RemoteControl({
   params,
 }: {
   params: Promise<{ kode: string; itemId: string }>;
 }) {
-  const { kode } = use(params);
+  const { kode, itemId } = use(params);
   const supabase = createClient();
 
   const [slide, setSlide] = useState<number | null>(null);
   const [totalPages, setTotalPages] = useState<number | null>(null);
   const padRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<any>(null);
+
+  // --- state untuk catatan presentator ---
+  const [catatan, setCatatan] = useState("");
+  const [menyimpan, setMenyimpan] = useState(false);
+  const [tersimpan, setTersimpan] = useState(false);
+  const tersimpanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const channel = supabase.channel(channelName(kode));
@@ -42,6 +48,7 @@ export default function RemoteControl({
 
     return () => {
       channel.unsubscribe();
+      if (tersimpanTimerRef.current) clearTimeout(tersimpanTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kode]);
@@ -74,6 +81,30 @@ export default function RemoteControl({
     });
   };
 
+  // --- simpan catatan ke Supabase, tidak pernah dibroadcast ke channel ---
+  const simpanCatatan = async () => {
+    const isi = catatan.trim();
+    if (!isi || menyimpan) return;
+
+    setMenyimpan(true);
+    const { error } = await supabase.from("presentasi_catatan").insert({
+      item_id: itemId,
+      slide: slide ?? 1,
+      isi,
+    });
+    setMenyimpan(false);
+
+    if (error) {
+      alert("Gagal menyimpan catatan: " + error.message);
+      return;
+    }
+
+    setCatatan("");
+    setTersimpan(true);
+    if (tersimpanTimerRef.current) clearTimeout(tersimpanTimerRef.current);
+    tersimpanTimerRef.current = setTimeout(() => setTersimpan(false), 2000);
+  };
+
   return (
     <div className="fixed inset-0 bg-[#111] text-white flex flex-col">
       <div className="p-4 text-center border-b border-white/10">
@@ -100,6 +131,30 @@ export default function RemoteControl({
       >
         <Radar size={28} />
         <span>Tahan &amp; geser di sini buat laser pointer</span>
+      </div>
+
+      {/* Panel catatan presentator — hanya ada di remote, tidak pernah tampil di layar proyeksi */}
+      <div className="px-4 pb-2">
+        <label className="flex items-center gap-2 text-white/50 text-xs mb-1">
+          <NotebookPen size={14} />
+          Catatan kritik untuk slide {slide ?? "-"} (hanya kamu yang lihat)
+        </label>
+        <div className="flex gap-2">
+          <textarea
+            value={catatan}
+            onChange={(e) => setCatatan(e.target.value)}
+            placeholder="Tulis kritik/masukan dari audiens..."
+            rows={2}
+            className="flex-1 bg-white/10 rounded-xl px-3 py-2 text-sm resize-none placeholder:text-white/30 outline-none focus:ring-2 focus:ring-[#800020]"
+          />
+          <button
+            onClick={simpanCatatan}
+            disabled={!catatan.trim() || menyimpan}
+            className="shrink-0 w-14 rounded-xl bg-[#800020] disabled:opacity-40 flex items-center justify-center"
+          >
+            {tersimpan ? <Check size={20} /> : <NotebookPen size={18} />}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 p-4 pb-8">

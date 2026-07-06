@@ -5,7 +5,7 @@ import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { generateThumbnail } from "@/lib/pdfRender";
 import { channelName, EVENT_NAME } from "@/lib/presentasiChannel";
-import { Upload, Play, GripVertical, Copy } from "lucide-react";
+import { Upload, Play, GripVertical, Copy, NotebookPen } from "lucide-react";
 
 interface SesiPresentasi {
   id: string;
@@ -19,6 +19,13 @@ interface PresentasiItem {
   file_url: string;
   thumbnail_url: string | null;
   urutan: number;
+}
+
+interface CatatanItem {
+  id: string;
+  slide: number;
+  isi: string;
+  created_at: string;
 }
 
 export default function LobbySesi({
@@ -36,6 +43,11 @@ export default function LobbySesi({
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+
+  // --- state untuk modal catatan ---
+  const [modalCatatan, setModalCatatan] = useState<PresentasiItem | null>(null);
+  const [daftarCatatan, setDaftarCatatan] = useState<CatatanItem[]>([]);
+  const [loadingCatatan, setLoadingCatatan] = useState(false);
 
   useEffect(() => {
     fetchSesi();
@@ -146,6 +158,30 @@ export default function LobbySesi({
     alert("Link disalin!");
   };
 
+  // --- fungsi untuk modal catatan ---
+  const bukaCatatan = async (item: PresentasiItem) => {
+    setModalCatatan(item);
+    setLoadingCatatan(true);
+    const { data } = await supabase
+      .from("presentasi_catatan")
+      .select("id, slide, isi, created_at")
+      .eq("item_id", item.id)
+      .order("slide", { ascending: true })
+      .order("created_at", { ascending: true });
+    setDaftarCatatan(data || []);
+    setLoadingCatatan(false);
+  };
+
+  const tutupCatatan = () => {
+    setModalCatatan(null);
+    setDaftarCatatan([]);
+  };
+
+  const hapusCatatan = async (id: string) => {
+    await supabase.from("presentasi_catatan").delete().eq("id", id);
+    setDaftarCatatan((prev) => prev.filter((c) => c.id !== id));
+  };
+
   if (!sesi) {
     return (
       <div className="p-8 max-w-3xl mx-auto min-h-screen bg-[#f8f9fa]">
@@ -238,15 +274,71 @@ export default function LobbySesi({
                   <GripVertical size={16} className="text-slate-300 shrink-0" />
                   <span className="font-bold truncate">{item.nama_kelompok}</span>
                 </div>
-                <button
-                  onClick={() => handleMulai(item)}
-                  className="flex items-center gap-1 bg-[#800020] text-white text-sm font-bold px-3 py-2 rounded-xl shrink-0"
-                >
-                  <Play size={14} /> Mulai
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => bukaCatatan(item)}
+                    className="flex items-center gap-1 bg-slate-100 text-slate-700 text-sm font-bold px-3 py-2 rounded-xl"
+                  >
+                    <NotebookPen size={14} /> Catatan
+                  </button>
+                  <button
+                    onClick={() => handleMulai(item)}
+                    className="flex items-center gap-1 bg-[#800020] text-white text-sm font-bold px-3 py-2 rounded-xl"
+                  >
+                    <Play size={14} /> Mulai
+                  </button>
+                </div>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Modal catatan kritik per kelompok */}
+      {modalCatatan && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+          onClick={tutupCatatan}
+        >
+          <div
+            className="bg-white rounded-[24px] max-w-lg w-full max-h-[80vh] overflow-y-auto p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="font-black text-lg mb-1">{modalCatatan.nama_kelompok}</h2>
+            <p className="text-slate-400 text-sm mb-4">Catatan kritik dari audiens</p>
+
+            {loadingCatatan ? (
+              <p className="text-slate-400 text-sm">Memuat...</p>
+            ) : daftarCatatan.length === 0 ? (
+              <p className="text-slate-400 text-sm">Belum ada catatan.</p>
+            ) : (
+              <div className="space-y-3">
+                {daftarCatatan.map((c) => (
+                  <div key={c.id} className="border border-slate-200 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-[#800020]">
+                        Slide {c.slide}
+                      </span>
+                      <button
+                        onClick={() => hapusCatatan(c.id)}
+                        className="text-xs text-slate-400 hover:text-red-600"
+                      >
+                        Hapus
+                      </button>
+                    </div>
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{c.isi}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button
+              onClick={tutupCatatan}
+              className="mt-5 w-full py-3 rounded-xl bg-slate-100 font-bold"
+            >
+              Tutup
+            </button>
+          </div>
         </div>
       )}
     </div>
