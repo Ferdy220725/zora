@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function SetPassword() {
+function SetPasswordForm() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [ready, setReady] = useState(false);
@@ -18,7 +18,6 @@ export default function SetPassword() {
     const handleSession = async () => {
       const code = searchParams.get("code");
 
-      // Kalau ada ?code=... di URL (link dari email undangan), tukar dulu jadi session
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) {
@@ -29,7 +28,6 @@ export default function SetPassword() {
         return;
       }
 
-      // Fallback: cek kalau session sudah ada (misal user refresh halaman ini)
       const { data } = await supabase.auth.getSession();
       if (data.session) {
         setReady(true);
@@ -103,5 +101,13 @@ export default function SetPassword() {
         </button>
       </form>
     </div>
+  );
+}
+
+export default function SetPassword() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Memuat...</div>}>
+      <SetPasswordForm />
+    </Suspense>
   );
 }
