@@ -14,13 +14,38 @@ export default function SetPassword() {
   const router = useRouter();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        setReady(true);
+    const setupSession = async () => {
+      // Ambil token langsung dari hash URL (#access_token=...&refresh_token=...)
+      const hash = window.location.hash.substring(1);
+      const params = new URLSearchParams(hash);
+      const access_token = params.get("access_token");
+      const refresh_token = params.get("refresh_token");
+
+      if (access_token && refresh_token) {
+        const { data, error } = await supabase.auth.setSession({
+          access_token,
+          refresh_token,
+        });
+
+        if (error || !data.session) {
+          setErrorMsg("Link tidak valid atau sudah kadaluarsa. Minta admin kirim ulang undangan.");
+        } else {
+          setReady(true);
+          // Bersihkan token dari address bar biar tidak nyangkut di history/tab
+          window.history.replaceState(null, "", window.location.pathname);
+        }
       } else {
-        setErrorMsg("Link tidak valid atau sudah kadaluarsa. Minta admin kirim ulang undangan.");
+        // Fallback: mungkin sesi sudah ada dari sebelumnya
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          setReady(true);
+        } else {
+          setErrorMsg("Link tidak valid atau sudah kadaluarsa. Minta admin kirim ulang undangan.");
+        }
       }
-    });
+    };
+
+    setupSession();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
