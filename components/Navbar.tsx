@@ -10,7 +10,6 @@ import {
   UserCog,
   Menu,
   X,
-  Sprout,
   CalendarDays,
   MonitorPlay,
   Info,
@@ -54,13 +53,6 @@ export default function Navbar() {
     { id: "m3", name: "Praktikum", href: "/praktikum", icon: <FlaskConical size={20} /> },
     { id: "m_jadwal", name: "Jadwal", href: "/jadwal-sistem/list", icon: <CalendarDays size={20} /> },
     { id: "m_presentasi", name: "Presentasi", href: "/presentasi", icon: <MonitorPlay size={20} /> },
-    {
-      id: "m_ext",
-      name: "Pertanian Perkotaan",
-      href: "https://pertanian-perkotaan-c.vercel.app/",
-      icon: <Sprout size={20} />,
-      isExternal: true,
-    },
     { id: "m4", name: "Izin", href: "/perizinan", icon: <FileText size={20} /> },
     { id: "m_tentang", name: "Tentang", href: "/tentang", icon: <Info size={20} /> },
     { id: "m5", name: "Admin", href: "/admin", icon: <UserCog size={20} /> },
@@ -80,8 +72,6 @@ export default function Navbar() {
             key={item.id}
             href={item.href}
             onClick={() => setIsOpen(false)}
-            target={item.isExternal ? "_blank" : undefined}
-            rel={item.isExternal ? "noopener noreferrer" : undefined}
             className={`flex items-center justify-end gap-3 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-md border pointer-events-auto ${
               pathname === item.href
                 ? "bg-[#800020] text-white border-[#800020]"
@@ -89,7 +79,7 @@ export default function Navbar() {
             }`}
           >
             <span className="text-[10px] font-black uppercase tracking-widest">{item.name}</span>
-            <div className={`p-1 rounded-lg text-inherit ${item.isExternal ? "bg-emerald-50 text-emerald-600" : "bg-slate-50/50 dark:bg-white/5"}`}>
+            <div className="p-1 rounded-lg text-inherit bg-slate-50/50 dark:bg-white/5">
               {item.icon}
             </div>
           </Link>
