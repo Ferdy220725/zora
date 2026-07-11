@@ -16,8 +16,8 @@ function SetPasswordForm() {
 
   useEffect(() => {
     const handleSession = async () => {
-      // Kasus 1: link format baru pakai ?code=...
       const code = searchParams.get("code");
+
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) {
@@ -28,26 +28,6 @@ function SetPasswordForm() {
         return;
       }
 
-      // Kasus 2: link format lama pakai #access_token=...&refresh_token=...
-      const hash = window.location.hash.substring(1); // buang tanda #
-      const hashParams = new URLSearchParams(hash);
-      const access_token = hashParams.get("access_token");
-      const refresh_token = hashParams.get("refresh_token");
-
-      if (access_token && refresh_token) {
-        const { error } = await supabase.auth.setSession({
-          access_token,
-          refresh_token,
-        });
-        if (error) {
-          setErrorMsg("Link tidak valid atau sudah kadaluarsa. Minta admin kirim ulang undangan.");
-          return;
-        }
-        setReady(true);
-        return;
-      }
-
-      // Kasus 3 (fallback): mungkin session sudah ada duluan (refresh halaman)
       const { data } = await supabase.auth.getSession();
       if (data.session) {
         setReady(true);

@@ -26,7 +26,8 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   // Menambahkan /auth/callback agar token email bisa diproses
-  const publicPaths = ['/login', '/set-password', '/auth/callback'] 
+  // + /absensi & /tentang boleh diakses tanpa login
+  const publicPaths = ['/login', '/set-password', '/auth/callback', '/absensi', '/tentang']
   const isPublicPath = publicPaths.some((path) => request.nextUrl.pathname.startsWith(path))
 
   // Jika user belum login dan mencoba akses halaman privat, arahkan ke login
