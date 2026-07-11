@@ -99,6 +99,78 @@ async function callGeminiWithRetry(systemPrompt: string, userPrompt: string, ret
   return "⚠️ AI sedang sibuk, coba lagi beberapa saat lagi ya.";
 }
 
+// ── Daftar alias command tanpa "/" ─────────────────────────────────────────
+// Grup ini khusus buat ngobrol sama bot, jadi matching-nya dibikin longgar
+// (dicari di mana pun dalam kalimat, bukan cuma di awal pesan)
+const commandAliases: Record<string, string[]> = {
+  "/help": ["bantuan", "menu", "perintah apa aja", "bisa apa"],
+  "/jadwal": ["jadwal zoom", "jadwal kelas", "jadwal"],
+  "/tugaskuliah": ["tugas kuliah"],
+  "/tugasprak": ["tugas praktikum", "tugas prak"],
+  "/tugas": ["tugas apa aja", "ada tugas", "semua tugas", "tugas"],
+  "/absen": ["status absen", "absensi", "absen"],
+  "/listdosen": ["daftar dosen", "list dosen", "semua dosen"],
+  "/dosen": ["kontak dosen", "cari dosen", "dosen"],
+  "/materi": ["cari materi", "materi"],
+  // alias paling pendek/umum diletakkan terakhir biar prioritasnya paling rendah
+  "/start": ["halo", "hai", "hei zora", "woy zora", "zora"],
+};
+
+// ── Resolver: mendeteksi command dari teks dengan atau tanpa "/" ──────────
+function resolveCommand(rawText: string): { command: string; args: string } {
+  const trimmed = rawText.trim();
+
+  // 1. Kalau diawali "/", tetap pakai parsing lama (paling presisi, tetap didukung)
+  if (trimmed.startsWith("/")) {
+    const parts = trimmed.split(" ");
+    return {
+      command: parts[0].split("@")[0].trim().toLowerCase(),
+      args: parts.slice(1).join(" ").trim(),
+    };
+  }
+
+  // 2. Tanpa "/" → cari alias di mana pun dalam kalimat
+  const lower = trimmed.toLowerCase();
+  const allMatches: { command: string; alias: string }[] = [];
+
+  for (const [command, aliases] of Object.entries(commandAliases)) {
+    for (const alias of aliases) {
+      if (lower.includes(alias)) {
+        allMatches.push({ command, alias });
+      }
+    }
+  }
+
+  if (allMatches.length === 0) return { command: "", args: "" };
+
+  // alias terpanjang menang, biar "tugas kuliah" nggak kepotong jadi "tugas" doang
+  // dan "jadwal" nggak kalah sama "zora" kalau dua-duanya kesebut
+  allMatches.sort((a, b) => b.alias.length - a.alias.length);
+  const best = allMatches[0];
+
+  const idx = lower.indexOf(best.alias);
+  const args = lower.slice(idx + best.alias.length).trim();
+
+  return { command: best.command, args };
+}
+
+// ── Command: Sambutan hangat saat Zora dipanggil ───────────────────────────
+const sambutanList = [
+  "Halo! 👋 Zora siap bantu, mau cek apa nih hari ini?",
+  "Woy, ada yang manggil! 🤗 Ada yang bisa Zora bantu?",
+  "Hai Class C! 🌱 Zora standby nih, mau tanya jadwal, tugas, atau materi?",
+  "Halo halo! 😊 Zora di sini, tinggal bilang aja butuh apa.",
+  "Yoo! 🚀 Zora online, siap bantu urusan kuliah kalian.",
+];
+
+async function handleSambutan(chatId: number | string) {
+  const pesan = sambutanList[Math.floor(Math.random() * sambutanList.length)];
+  await replyTelegram(
+    chatId,
+    `${pesan}\n\nKetik <b>menu</b> atau <b>/help</b> buat lihat semua yang bisa Zora lakuin.`
+  );
+}
+
 // ── Logic: Cron Job Harian Gabungan ───────────────────────────────────────
 async function handleCronHarian() {
   try {
@@ -111,7 +183,6 @@ async function handleCronHarian() {
 
     const now = new Date();
 
-    // ── BAGIAN 1: PENGINGAT TUGAS OTOMATIS ──
     const { data: tugasKuliah } = await supabase
       .from("tugas_perkuliahan")
       .select("*")
@@ -127,7 +198,6 @@ async function handleCronHarian() {
       await replyTelegram(TARGET_CHAT_ID, teksReminder);
     }
 
-    // ── BAGIAN 2: CEK INFO SIAMIK ──
     const { data: infoSiamik, error: siamikErr } = await supabase
       .from("siamik_news")
       .select("*")
@@ -175,7 +245,8 @@ async function handleHelp(chatId: number | string) {
     `/absen — Status sistem absensi\n` +
     `/dosen [nama] — Cari kontak dosen Faperta\n` +
     `/listdosen — Daftar semua dosen Faperta\n` +
-    `/help — Tampilkan pesan ini`;
+    `/help — Tampilkan pesan ini\n\n` +
+    `💬 <i>Bisa juga chat natural, misal: "ada tugas apa aja" atau "jadwal zoom"</i>`;
   await replyTelegram(chatId, text);
 }
 
@@ -385,7 +456,6 @@ async function handleDosen(chatId: number | string, keyword: string) {
     return;
   }
 
-  // Batasi 5 hasil agar pesan tidak terlalu panjang
   const tampil = hasil.slice(0, 5);
   const sisanya = hasil.length > 5 ? hasil.length - 5 : 0;
 
@@ -424,7 +494,6 @@ async function handleListDosen(chatId: number | string) {
   const header = `👥 <b>DAFTAR DOSEN FAPERTA UPN JATIM (${dataDosen.length} dosen)</b>\n\n`;
   const fullText = header + list;
 
-  // Split otomatis kalau terlalu panjang
   await replyTelegramLong(chatId, fullText);
 }
 
@@ -444,12 +513,12 @@ export async function POST(req: NextRequest) {
     const chatId = message.chat?.id;
     const text: string = message.text || "";
 
-    const parts = text.split(" ");
-    const command = parts[0].split("@")[0].trim().toLowerCase();
-    const args = parts.slice(1).join(" ").trim();
+    const { command, args } = resolveCommand(text);
 
     switch (command) {
       case "/start":
+        await handleSambutan(chatId);
+        break;
       case "/help":
         await handleHelp(chatId);
         break;
