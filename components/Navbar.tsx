@@ -24,7 +24,7 @@ const menuItems = [
   { id: "m1", name: "Home", href: "/", icon: LayoutDashboard },
   { id: "m_absensi", name: "Absensi", href: "/absensi", icon: ClipboardCheck },
   { id: "m2", name: "Materi", href: "/materi", icon: BookOpen },
-  { id: "m_zora_ai", name: "ZORA AI", href: "/zora-ai", icon: null }, // pakai logo custom, lihat render di bawah
+  { id: "m_zora_ai", name: "ZORA AI", href: "/zora-ai", icon: null },
   { id: "m3", name: "Praktikum", href: "/praktikum", icon: FlaskConical },
   { id: "m_jadwal", name: "Jadwal", href: "/jadwal-sistem/list", icon: CalendarDays },
   { id: "m_presentasi", name: "Presentasi", href: "/presentasi", icon: MonitorPlay },
@@ -34,6 +34,10 @@ const menuItems = [
   { id: "m_tentang", name: "Tentang", href: "/tentang", icon: Info },
   { id: "m5", name: "Admin", href: "/admin", icon: UserCog },
 ];
+
+// Halaman-halaman yang sudah punya bottom bar sendiri —
+// floating menu ini disembunyikan di sini supaya tidak tabrakan
+const HIDDEN_ON = ["/zora-ai"];
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -45,13 +49,17 @@ export default function Navbar() {
 
   if (!shouldShow) return null;
 
+  const isHidden = HIDDEN_ON.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`)
+  );
+  if (isHidden) return null;
+
   return (
     <div className="fixed bottom-4 right-4 z-[9999] flex justify-end pointer-events-none">
       <div
         className="pointer-events-auto inline-flex items-center rounded-full backdrop-blur-xl border border-white/25 shadow-2xl overflow-hidden"
         style={{ backgroundColor: "rgba(128,0,32,0.85)" }}
       >
-        {/* strip menu horizontal - lebarnya animate dari 0 ke maxWidth */}
         <div
           className="flex items-center gap-1 overflow-x-auto no-scrollbar snap-x snap-mandatory"
           style={{
@@ -100,7 +108,6 @@ export default function Navbar() {
           })}
         </div>
 
-        {/* tombol utama - selalu terlihat, morph jadi X saat dibuka */}
         <button
           onClick={() => setOpen((v) => !v)}
           aria-label={open ? "Tutup menu" : "Buka menu"}
