@@ -1,10 +1,11 @@
 // app/api/zora-ai/ringkas/route.ts
+import "pdf-parse/worker"; // WAJIB paling atas, sebelum import "pdf-parse"
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { PDFParse } from "pdf-parse";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
-export const maxDuration = 60; // beri waktu sampai 60 detik untuk proses parse PDF + panggil Gemini
+export const maxDuration = 60;
 
 const MAX_CHARS = 60000; // batas aman jumlah karakter yang dikirim ke AI
 
@@ -30,7 +31,6 @@ export async function POST(req: NextRequest) {
 
     let teks = (materi.konten_teks || "").trim();
 
-    // Kalau belum pernah diekstrak, ambil & ekstrak teks langsung dari URL PDF-nya
     if (!teks || teks.length < 50) {
       const parser = new PDFParse({ url: materi.file_url });
 
@@ -57,7 +57,6 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Cache hasil ekstraksi ke Supabase supaya tidak perlu diekstrak ulang
       await supabase.from("materi").update({ konten_teks: teks }).eq("id", materiId);
     }
 
@@ -94,7 +93,6 @@ ${teksUntukAI}
         mk_nama: materi.mk_nama,
         semester: materi.semester,
       },
-      // dikirim balik ke frontend supaya bisa dipakai sebagai konteks chat lanjutan
       konteks: teksUntukAI,
     });
   } catch (err) {
