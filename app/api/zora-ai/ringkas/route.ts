@@ -4,6 +4,8 @@ import { GoogleGenAI } from "@google/genai";
 import { PDFParse } from "pdf-parse";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
+export const maxDuration = 60; // beri waktu sampai 60 detik untuk proses parse PDF + panggil Gemini
+
 const MAX_CHARS = 60000; // batas aman jumlah karakter yang dikirim ke AI
 
 export async function POST(req: NextRequest) {
