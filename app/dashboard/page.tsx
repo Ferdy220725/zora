@@ -281,10 +281,10 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
           <button
-            onClick={() => router.push('/absensi')}
-            className="bg-[#800020] text-white p-6 rounded-[35px] font-black uppercase text-lg border-b-8 border-[#5a0016] italic active:scale-95 transition-all shadow-xl flex items-center justify-center gap-3"
+            onClick={() => router.push('/desain-jadwal')}
+            className="bg-[#004d40] text-white p-6 rounded-[35px] font-black uppercase text-lg border-b-8 border-[#00332b] italic active:scale-95 transition-all shadow-xl flex items-center justify-center gap-3"
           >
-            📝 Absensi
+            🖼️ Desain Jadwal
           </button>
 
           <div className="bg-white p-5 rounded-[35px] shadow-xl border-b-8 border-blue-600 border-2 border-slate-200 flex flex-col justify-center items-center text-center">

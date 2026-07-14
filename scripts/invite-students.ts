@@ -14,7 +14,7 @@ if (!supabaseUrl || !serviceRoleKey) {
 const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
 const students = [
-  { npm: "25025010110", nama: "AGATHA ZULEYKA RAMDAN" , email: "" },
+  { npm: "25025010094", nama: "AGNIA LAQUINTA AL-ABIN" },
 ].map((s: any) => ({
   ...s,
   email: s.email || `${s.npm}@student.upnjatim.ac.id`,

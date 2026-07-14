@@ -26,6 +26,7 @@
     "cheerio": "^1.2.0",
     "eslint-config-next": "^16.2.2",
     "framer-motion": "^12.38.0",
+    "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^5.0.7",
