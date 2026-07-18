@@ -44,6 +44,9 @@ export const students = [
   { npm: "25025010135", nama: "RAFINES AL MUSLIM" },
   { npm: "25025010137", nama: "SONYA DAMAYANTI AZ-ZAHARA" },
   { npm: "25025010138", nama: "PRATIWI CITRA OKTAVIA" },
+  { npm: "12345678910", nama: "ADMIN E"},
+  { npm: "220725", nama: "FERDY ADMIN C"},
+
 ].map((s) => ({
   ...s,
   email: `${s.npm}@student.upnjatim.ac.id`,
