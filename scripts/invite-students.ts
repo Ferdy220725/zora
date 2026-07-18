@@ -13,8 +13,12 @@ if (!supabaseUrl || !serviceRoleKey) {
 
 const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
+// ── GANTI SESUAI KELAS YANG LAGI DI-INVITE ─────────────────────────────────
+// Ambil dari: select id, nama, kode from public.kelas;
+const KELAS_ID = "1d9d9039-f44e-4fab-bb0c-587103b74f6e"; // Agroteknologi Kelas C
+
 const students = [
-  { npm: "25025010094", nama: "AGNIA LAQUINTA AL-ABIN" },
+  { npm: "220725", nama: "FERDY", email: "kibayzay@gmail.com" },
 ].map((s: any) => ({
   ...s,
   email: s.email || `${s.npm}@student.upnjatim.ac.id`,
@@ -36,7 +40,7 @@ async function findExistingUser(email: string) {
 }
 
 async function inviteAllStudents() {
-  console.log(`🚀 Memulai proses pengiriman undangan untuk ${students.length} mahasiswa...\n`);
+  console.log(`🚀 Memulai proses pengiriman undangan untuk ${students.length} mahasiswa ke kelas ${KELAS_ID}...\n`);
 
   for (const s of students) {
     try {
@@ -58,6 +62,7 @@ async function inviteAllStudents() {
         data: {
           nama: s.nama,
           npm: s.npm,
+          kelas_id: KELAS_ID,
         },
         redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/set-password`,
       });
