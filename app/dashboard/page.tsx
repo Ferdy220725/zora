@@ -82,6 +82,9 @@ export default function Dashboard() {
 
   const [riwayatBukti, setRiwayatBukti] = useState<Record<string, BuktiTugas>>({});
 
+  // kelas_id milik user yang login, dipakai saat insert ke bukti_tugas (kolom NOT NULL)
+  const [kelasId, setKelasId] = useState<string | null>(null);
+
   const supabase = createClient();
   const router = useRouter();
 
@@ -143,6 +146,14 @@ export default function Dashboard() {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (user) {
+      // Ambil kelas_id user sekali di sini, dipakai lagi saat submit bukti tugas
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('kelas_id')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profile) setKelasId(profile.kelas_id);
+
       const { data: buktiData } = await supabase
         .from('bukti_tugas')
         .select('tugas_id, link_bukti, created_at')
@@ -186,15 +197,34 @@ export default function Dashboard() {
         return;
       }
 
+      // Pastikan kelas_id ada sebelum insert, karena kolom ini NOT NULL di tabel bukti_tugas
+      let kelasIdToUse = kelasId;
+      if (!kelasIdToUse) {
+        const { data: profile, error: profileErr } = await supabase
+          .from('profiles')
+          .select('kelas_id')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (profileErr || !profile?.kelas_id) {
+          alert("Gagal menyimpan bukti: kelas kamu belum terdeteksi. Coba refresh halaman ini.");
+          return;
+        }
+        kelasIdToUse = profile.kelas_id;
+        setKelasId(kelasIdToUse);
+      }
+
       const { error } = await supabase
         .from('bukti_tugas')
         .upsert({
           user_id: user.id,
           tugas_id: id,
+          kelas_id: kelasIdToUse,
           link_bukti: urlInput.trim(),
         }, { onConflict: 'user_id,tugas_id' });
 
       if (error) {
+        console.error('Gagal menyimpan bukti_tugas:', error);
         alert("Gagal menyimpan bukti ke sistem: " + error.message);
         return;
       }
@@ -209,6 +239,7 @@ export default function Dashboard() {
         .eq('tugas_id', id);
 
       if (error) {
+        console.error('Gagal menghapus bukti_tugas:', error);
         alert("Gagal memperbarui status di sistem: " + error.message);
         return;
       }
