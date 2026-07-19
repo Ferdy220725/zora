@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { motion, useMotionValue, useTransform, useSpring } from "framer-motion";
-import { BookOpen, PackageOpen } from 'lucide-react';
+import { BookOpen, PackageOpen, Download } from 'lucide-react';
 
 // --- KOMPONEN INTERAKTIF (3D EFFECT) ---
 function InteractiveCard({ children }: { children: React.ReactNode }) {
@@ -160,14 +160,22 @@ export default function MateriPage() {
                 </div>
 
                 {/* Action Button */}
-                <div className="mt-6">
+                <div className="mt-6 flex gap-2">
                   <a
                     href={m.file_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block w-full text-center py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase shadow-md hover:bg-indigo-700 active:scale-95 transition-all"
+                    className="flex-1 text-center py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase shadow-md hover:bg-indigo-700 active:scale-95 transition-all"
                   >
                     Lihat Materi
+                  </a>
+                  <a
+                    href={m.file_url}
+                    download
+                    className="w-14 flex items-center justify-center bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 rounded-2xl shadow-sm hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all"
+                    title="Unduh Materi"
+                  >
+                    <Download size={16} strokeWidth={2.5} />
                   </a>
                 </div>
               </div>
