@@ -432,7 +432,7 @@ export default function Dashboard() {
                 src="/icons/logo-jadwalkuliah.png"
                 alt=""
                 aria-hidden="true"
-                className="absolute -right-2 sm:right-0 md:right-2 -bottom-8 sm:-bottom-10 md:-bottom-12 h-[135%] sm:h-[130%] w-auto object-contain drop-shadow-2xl pointer-events-none select-none"
+                className="absolute -right-2 sm:right-0 md:right-2 -bottom-20 sm:-bottom-20 md:-bottom-24 h-[135%] sm:h-[130%] w-auto object-contain drop-shadow-2xl pointer-events-none select-none"
               />
 
               <div className="absolute -right-10 -bottom-10 w-56 h-56 bg-white/10 rounded-full blur-2xl" />
