@@ -50,6 +50,22 @@ interface PopupState {
 const BATAS_EDIT_MS = 15 * 60 * 1000; // 15 menit
 const LONG_PRESS_MS = 450;
 
+// Daftar emoji reaksi yang diizinkan (hanya ini yang bisa dipilih user)
+const REAKSI_TERSEDIA = [
+  // wajah / ekspresi
+  '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
+  '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😋', '😛', '😜',
+  '🤪', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😢', '😭',
+  '😤', '😠', '😡', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰',
+  '🤗', '🤔', '🙄', '😬', '🥱', '😴',
+  // hati
+  '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '💔', '💕',
+  '💖', '💘',
+  // tangan & simbol
+  '👍', '👎', '👏', '🙌', '🙏', '💪', '✌️', '🤝', '✨', '🔥',
+  '💯', '🎉',
+];
+
 const AVATAR_GRADIENTS = [
   'from-amber-400 to-orange-500',
   'from-indigo-400 to-purple-500',
@@ -90,7 +106,6 @@ export default function TugasSocialPanel({ tugasId, tugasTipe, kelasId }: TugasS
   const [sendingBalasan, setSendingBalasan] = useState<Record<string, boolean>>({});
 
   const [reaksiList, setReaksiList] = useState<ReaksiItem[]>([]);
-  const [reaksiInputValue, setReaksiInputValue] = useState('');
 
   const [editingBalasanId, setEditingBalasanId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
@@ -506,22 +521,16 @@ export default function TugasSocialPanel({ tugasId, tugasTipe, kelasId }: TugasS
 
   const tutupPopup = () => {
     setPopup(null);
-    setReaksiInputValue('');
   };
 
   const bukaModeReaksi = () => {
     setPopup((prev) => (prev ? { ...prev, mode: 'reaksi' } : prev));
-    setReaksiInputValue('');
   };
 
-  const kirimReaksiDariInput = () => {
+  // Dipanggil saat user tap salah satu emoji di grid reaksi
+  const pilihReaksi = (emoji: string) => {
     if (!popup) return;
-    const emoji = reaksiInputValue.trim();
-    if (!emoji) {
-      tutupPopup();
-      return;
-    }
-    handleToggleReaksi(popup.targetType, popup.targetId, emoji.slice(0, 16));
+    handleToggleReaksi(popup.targetType, popup.targetId, emoji);
     tutupPopup();
   };
 
@@ -838,28 +847,26 @@ export default function TugasSocialPanel({ tugasId, tugasTipe, kelasId }: TugasS
           })()}
 
           {popup.mode === 'reaksi' && (() => {
-            const { left, top } = hitungPosisiMenu(popup.x, popup.y, 220, 48);
+            // Grid emoji terbatas & scrollable — user hanya bisa pilih dari REAKSI_TERSEDIA, tidak bisa ketik bebas
+            const LEBAR_POPUP = 288;
+            const TINGGI_POPUP = 240;
+            const { left, top } = hitungPosisiMenu(popup.x, popup.y, LEBAR_POPUP, TINGGI_POPUP);
             return (
               <div
-                className="fixed z-50 bg-white dark:bg-slate-800 rounded-full shadow-xl border border-slate-100 dark:border-white/10 pl-3 pr-1.5 py-1.5 flex items-center gap-1.5"
-                style={{ left, top }}
+                className="fixed z-50 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-white/10 p-2"
+                style={{ left, top, width: LEBAR_POPUP, maxHeight: TINGGI_POPUP }}
               >
-                <input
-                  type="text"
-                  autoFocus
-                  maxLength={16}
-                  placeholder="Ketik emoji dari keyboard..."
-                  value={reaksiInputValue}
-                  onChange={(e) => setReaksiInputValue(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && kirimReaksiDariInput()}
-                  className="w-40 bg-transparent text-[13px] text-black dark:text-white focus:outline-none"
-                />
-                <button
-                  onClick={kirimReaksiDariInput}
-                  className="w-7 h-7 rounded-full bg-indigo-500 text-white text-[12px] font-black flex items-center justify-center shrink-0 active:scale-95 transition-transform"
-                >
-                  ✓
-                </button>
+                <div className="grid grid-cols-6 gap-0.5 overflow-y-auto pr-0.5" style={{ maxHeight: TINGGI_POPUP - 16 }}>
+                  {REAKSI_TERSEDIA.map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => pilihReaksi(emoji)}
+                      className="w-10 h-10 flex items-center justify-center text-[18px] rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 active:scale-90 transition-all"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
               </div>
             );
           })()}
