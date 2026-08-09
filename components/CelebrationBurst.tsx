@@ -17,7 +17,7 @@ const VARIANTS: Record<CelebrationVariant, VariantConfig> = {
   love: {
     icon: '💖',
     decor: ['✨', '⭐', '💛', '✨', '⭐', '💫', '✨', '⭐'],
-    labels: ['Zora • Tugas selesai!', 'Zora • Mantap!', 'Zora • Kerja bagus!'],
+    labels: ['Zora • Tugas selesai!', 'Zora • Mantap!', 'Zora • Bos besar lagi rajin, makasih!'],
     glowColor: 'rgba(250,199,117,0.5)',
     glowColor2: 'rgba(212,83,126,0.22)',
     labelBg: '#fff4e0',
@@ -27,7 +27,7 @@ const VARIANTS: Record<CelebrationVariant, VariantConfig> = {
   trophy: {
     icon: '🏆',
     decor: ['✨', '⭐', '🎉', '✨', '⭐', '🎊'],
-    labels: ['Zora • Pencapaian baru!', 'Zora • Level up!'],
+    labels: ['Zora • Kata gue lo mantep si', 'Zora • Nah gitu dong, mantap!'],
     glowColor: 'rgba(250,199,117,0.5)',
     glowColor2: 'rgba(212,140,20,0.22)',
     labelBg: '#fff4e0',
@@ -37,7 +37,7 @@ const VARIANTS: Record<CelebrationVariant, VariantConfig> = {
   rocket: {
     icon: '🚀',
     decor: ['✨', '💨', '⭐', '✨', '💨', '⭐'],
-    labels: ['Zora • Meluncur selesai!', 'Zora • Terus melesat!'],
+    labels: ['Zora • Hmm, oke sih! Trims', 'Zora • Akhirnya ngerjain juga, swn!'],
     glowColor: 'rgba(120,170,255,0.5)',
     glowColor2: 'rgba(70,110,220,0.22)',
     labelBg: '#e6f0ff',
@@ -47,7 +47,7 @@ const VARIANTS: Record<CelebrationVariant, VariantConfig> = {
   cap: {
     icon: '🎓',
     decor: ['✨', '📘', '⭐', '✨', '📗', '⭐'],
-    labels: ['Zora • Satu langkah lebih maju!', 'Zora • Mantap, lanjutkan!'],
+    labels: ['Zora • Siap banget ga sih wisuda', 'Zora • Makin mantep aja nih orang!'],
     glowColor: 'rgba(150,200,140,0.5)',
     glowColor2: 'rgba(80,140,70,0.22)',
     labelBg: '#eaf6e6',
@@ -57,7 +57,7 @@ const VARIANTS: Record<CelebrationVariant, VariantConfig> = {
   bolt: {
     icon: '⚡',
     decor: ['✨', '🔥', '⭐', '✨', '🔥', '⭐'],
-    labels: ['Zora • Semangat terus!', 'Zora • Konsisten banget!'],
+    labels: ['Zora • Terusno rajin mu!', 'Zora • Aduh rek rajin e, swn lo!'],
     glowColor: 'rgba(255,180,90,0.55)',
     glowColor2: 'rgba(220,90,40,0.25)',
     labelBg: '#fff0e0',
