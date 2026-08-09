@@ -1,5 +1,6 @@
 "use client";
 
+import TugasSocialPanel from '@/components/TugasSocialPanel';
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -692,6 +693,12 @@ export default function Dashboard() {
                               Selesai ✓
                             </button>
                           </div>
+
+                          <TugasSocialPanel
+                            tugasId={t.id}
+                            tugasTipe="kuliah"
+                            kelasId={kelasId ?? ''}
+                          />
                         </div>
                       </details>
                     );
