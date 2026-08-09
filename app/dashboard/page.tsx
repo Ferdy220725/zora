@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
 import AktifkanNotifikasi from '@/components/AktifkanNotifikasi';
+import { fireCelebration } from '@/components/CelebrationBurst';
 import { toast } from 'sonner';
 import {
   ClipboardList,
@@ -283,6 +284,9 @@ export default function Dashboard() {
         alert("Gagal menyimpan bukti ke sistem: " + error.message);
         return;
       }
+
+      // 🎉 Tugas berhasil ditandai selesai — munculkan animasi apresiasi
+      fireCelebration(); // random: love / trophy / rocket / cap / bolt
     } else {
       const konfirmasi = confirm("Apakah Anda yakin ingin membatalkan status selesai? Bukti pengumpulan di sistem akan dihapus.");
       if (!konfirmasi) return;
