@@ -24,6 +24,7 @@ export default function TugasSocialPanel({ tugasId, tugasTipe, kelasId }: TugasS
 
   const [totalMahasiswa, setTotalMahasiswa] = useState(0);
   const [totalSelesai, setTotalSelesai] = useState(0);
+  const [progresLoaded, setProgresLoaded] = useState(false);
   const [showHelpPanel, setShowHelpPanel] = useState(false);
   const [bantuanList, setBantuanList] = useState<BantuanItem[]>([]);
   const [pertanyaanInput, setPertanyaanInput] = useState('');
@@ -37,15 +38,19 @@ export default function TugasSocialPanel({ tugasId, tugasTipe, kelasId }: TugasS
       .select('*', { count: 'exact', head: true })
       .eq('tugas_id', tugasId);
 
-    const { count: mahasiswaCount } = await supabase
+    const { count: mahasiswaCount, error: mahasiswaError } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .eq('kelas_id', kelasId)
-      .eq('role', 'mahasiswa')
-      .eq('is_verified', true);
+      .eq('role', 'mahasiswa');
+
+    if (mahasiswaError) {
+      console.error('Gagal hitung total mahasiswa:', mahasiswaError.message);
+    }
 
     setTotalSelesai(selesaiCount || 0);
     setTotalMahasiswa(mahasiswaCount || 0);
+    setProgresLoaded(true);
   }, [supabase, tugasId, kelasId]);
 
   // --- Ambil daftar permintaan bantuan yang masih terbuka buat tugas ini ---
@@ -155,9 +160,11 @@ export default function TugasSocialPanel({ tugasId, tugasTipe, kelasId }: TugasS
       <div className="mb-3">
         <div className="flex justify-between items-baseline mb-1.5">
           <span className="text-[11px] text-slate-500 font-medium">
-            {totalMahasiswa > 0
+            {!progresLoaded
+              ? 'Memuat progres...'
+              : totalMahasiswa > 0
               ? `${totalSelesai} dari ${totalMahasiswa} mahasiswa sudah selesai`
-              : 'Memuat progres...'}
+              : 'Belum ada data mahasiswa di kelas ini'}
           </span>
           <span className="text-[11px] font-bold text-indigo-600">{persenSelesai}%</span>
         </div>
