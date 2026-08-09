@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { toast } from 'sonner';
 
@@ -9,6 +9,15 @@ interface BantuanItem {
   user_id: string;
   pertanyaan: string;
   status: string;
+  created_at: string;
+  nama_pengirim?: string;
+}
+
+interface BalasanItem {
+  id: string;
+  bantuan_id: string;
+  user_id: string;
+  isi: string;
   created_at: string;
   nama_pengirim?: string;
 }
@@ -30,6 +39,16 @@ export default function TugasSocialPanel({ tugasId, tugasTipe, kelasId }: TugasS
   const [pertanyaanInput, setPertanyaanInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // --- Balasan per pertanyaan: dikelompokkan per bantuan_id ---
+  const [balasanMap, setBalasanMap] = useState<Record<string, BalasanItem[]>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [balasanInput, setBalasanInput] = useState<Record<string, string>>({});
+  const [sendingBalasan, setSendingBalasan] = useState<Record<string, boolean>>({});
+
+  // ref biar realtime callback selalu tahu daftar bantuan terbaru,
+  // tanpa perlu re-subscribe channel tiap kali bantuanList berubah
+  const bantuanIdsRef = useRef<string[]>([]);
 
   // --- Ambil progres: berapa yang sudah selesai vs total mahasiswa di kelas ---
   const fetchProgres = useCallback(async () => {
@@ -53,6 +72,36 @@ export default function TugasSocialPanel({ tugasId, tugasTipe, kelasId }: TugasS
     setProgresLoaded(true);
   }, [supabase, tugasId, kelasId]);
 
+  // --- Ambil semua balasan buat daftar bantuan_id yang lagi tampil ---
+  const fetchBalasan = useCallback(async (bantuanIds: string[]) => {
+    if (bantuanIds.length === 0) {
+      setBalasanMap({});
+      return;
+    }
+    const { data, error } = await supabase
+      .from('bantuan_tugas_balasan')
+      .select('id, bantuan_id, user_id, isi, created_at, profiles:user_id(nama)')
+      .in('bantuan_id', bantuanIds)
+      .order('created_at', { ascending: true });
+
+    if (!error && data) {
+      const grouped: Record<string, BalasanItem[]> = {};
+      data.forEach((b: any) => {
+        const item: BalasanItem = {
+          id: b.id,
+          bantuan_id: b.bantuan_id,
+          user_id: b.user_id,
+          isi: b.isi,
+          created_at: b.created_at,
+          nama_pengirim: b.profiles?.nama || 'Teman sekelas',
+        };
+        if (!grouped[b.bantuan_id]) grouped[b.bantuan_id] = [];
+        grouped[b.bantuan_id].push(item);
+      });
+      setBalasanMap(grouped);
+    }
+  }, [supabase]);
+
   // --- Ambil daftar permintaan bantuan yang masih terbuka buat tugas ini ---
   const fetchBantuan = useCallback(async () => {
     const { data, error } = await supabase
@@ -63,18 +112,20 @@ export default function TugasSocialPanel({ tugasId, tugasTipe, kelasId }: TugasS
       .order('created_at', { ascending: false });
 
     if (!error && data) {
-      setBantuanList(
-        data.map((b: any) => ({
-          id: b.id,
-          user_id: b.user_id,
-          pertanyaan: b.pertanyaan,
-          status: b.status,
-          created_at: b.created_at,
-          nama_pengirim: b.profiles?.nama || 'Teman sekelas',
-        }))
-      );
+      const list = data.map((b: any) => ({
+        id: b.id,
+        user_id: b.user_id,
+        pertanyaan: b.pertanyaan,
+        status: b.status,
+        created_at: b.created_at,
+        nama_pengirim: b.profiles?.nama || 'Teman sekelas',
+      }));
+      setBantuanList(list);
+      const ids = list.map((b) => b.id);
+      bantuanIdsRef.current = ids;
+      fetchBalasan(ids);
     }
-  }, [supabase, tugasId]);
+  }, [supabase, tugasId, fetchBalasan]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -104,11 +155,28 @@ export default function TugasSocialPanel({ tugasId, tugasTipe, kelasId }: TugasS
       )
       .subscribe();
 
+    // --- Subscribe realtime: balasan baru ikut muncul di thread yang relevan ---
+    // Tabel ini tidak difilter tugas_id langsung, jadi disaring manual lewat bantuanIdsRef
+    const balasanChannel = supabase
+      .channel(`bantuan-balasan-${tugasId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bantuan_tugas_balasan' },
+        (payload: any) => {
+          const relatedId = payload.new?.bantuan_id || payload.old?.bantuan_id;
+          if (relatedId && bantuanIdsRef.current.includes(relatedId)) {
+            fetchBalasan(bantuanIdsRef.current);
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(buktiChannel);
       supabase.removeChannel(bantuanChannel);
+      supabase.removeChannel(balasanChannel);
     };
-  }, [tugasId, fetchProgres, fetchBantuan, supabase]);
+  }, [tugasId, fetchProgres, fetchBantuan, fetchBalasan, supabase]);
 
   const persenSelesai = totalMahasiswa > 0 ? Math.round((totalSelesai / totalMahasiswa) * 100) : 0;
 
@@ -154,6 +222,34 @@ export default function TugasSocialPanel({ tugasId, tugasTipe, kelasId }: TugasS
     toast.success('Ditandai sudah terjawab');
   };
 
+  // --- Kirim balasan ke pertanyaan tertentu ---
+  const handleKirimBalasan = async (bantuanId: string) => {
+    const isi = (balasanInput[bantuanId] || '').trim();
+    if (!isi) {
+      toast.warning('Tulis dulu jawabanmu');
+      return;
+    }
+    if (!currentUserId) {
+      toast.error('Sesi kamu tidak terdeteksi, coba refresh halaman');
+      return;
+    }
+
+    setSendingBalasan((prev) => ({ ...prev, [bantuanId]: true }));
+    const { error } = await supabase.from('bantuan_tugas_balasan').insert([{
+      bantuan_id: bantuanId,
+      user_id: currentUserId,
+      isi,
+    }]);
+    setSendingBalasan((prev) => ({ ...prev, [bantuanId]: false }));
+
+    if (error) {
+      toast.error('Gagal mengirim balasan: ' + error.message);
+      return;
+    }
+
+    setBalasanInput((prev) => ({ ...prev, [bantuanId]: '' }));
+  };
+
   return (
     <div className="mt-3">
       {/* PROGRES SOSIAL */}
@@ -192,30 +288,89 @@ export default function TugasSocialPanel({ tugasId, tugasTipe, kelasId }: TugasS
           {bantuanList.length === 0 ? (
             <p className="text-[11px] text-slate-400 italic">Belum ada yang minta bantuan di tugas ini.</p>
           ) : (
-            bantuanList.map((b) => (
-              <div
-                key={b.id}
-                className="flex items-start gap-2 bg-slate-50 dark:bg-white/5 rounded-xl p-2.5"
-              >
-                <div className="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center text-[10px] font-black text-amber-700 dark:text-amber-400 shrink-0">
-                  {b.nama_pengirim?.slice(0, 2).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200">{b.nama_pengirim}</p>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-300">{b.pertanyaan}</p>
-                </div>
-                {b.user_id === currentUserId && (
+            bantuanList.map((b) => {
+              const balasanTugasIni = balasanMap[b.id] || [];
+              const isExpanded = expandedId === b.id;
+
+              return (
+                <div
+                  key={b.id}
+                  className="bg-slate-50 dark:bg-white/5 rounded-xl overflow-hidden"
+                >
+                  {/* PERTANYAAN — klik buat expand/collapse thread */}
                   <button
-                    onClick={() => handleTutupBantuan(b.id)}
-                    className="text-[9px] font-black text-emerald-600 hover:underline shrink-0"
+                    onClick={() => setExpandedId(isExpanded ? null : b.id)}
+                    className="w-full flex items-start gap-2 p-2.5 text-left"
                   >
-                    Sudah terjawab
+                    <div className="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center text-[10px] font-black text-amber-700 dark:text-amber-400 shrink-0">
+                      {b.nama_pengirim?.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200">{b.nama_pengirim}</p>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300">{b.pertanyaan}</p>
+                      <p className="text-[10px] text-indigo-600 font-bold mt-1">
+                        {balasanTugasIni.length > 0
+                          ? `${balasanTugasIni.length} balasan — ${isExpanded ? 'sembunyikan' : 'lihat & bantu jawab'}`
+                          : (isExpanded ? 'sembunyikan' : 'balas & bantu jawab')}
+                      </p>
+                    </div>
+                    {b.user_id === currentUserId && (
+                      <span
+                        role="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTutupBantuan(b.id);
+                        }}
+                        className="text-[9px] font-black text-emerald-600 hover:underline shrink-0 pt-0.5"
+                      >
+                        Sudah terjawab
+                      </span>
+                    )}
                   </button>
-                )}
-              </div>
-            ))
+
+                  {/* THREAD BALASAN */}
+                  {isExpanded && (
+                    <div className="px-2.5 pb-2.5 space-y-2">
+                      {balasanTugasIni.length > 0 && (
+                        <div className="space-y-2 pl-3 border-l-2 border-amber-200 dark:border-amber-500/30">
+                          {balasanTugasIni.map((r) => (
+                            <div key={r.id} className="bg-white dark:bg-white/10 rounded-lg p-2">
+                              <p className="text-[10px] font-bold text-slate-700 dark:text-slate-200">
+                                {r.nama_pengirim}
+                              </p>
+                              <p className="text-[11px] text-slate-600 dark:text-slate-300">{r.isi}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Tulis jawabanmu di sini..."
+                          className="flex-1 border border-slate-200 dark:border-white/10 bg-white dark:bg-transparent p-2 rounded-xl text-[11px] text-black dark:text-white"
+                          value={balasanInput[b.id] || ''}
+                          onChange={(e) =>
+                            setBalasanInput((prev) => ({ ...prev, [b.id]: e.target.value }))
+                          }
+                          onKeyDown={(e) => e.key === 'Enter' && handleKirimBalasan(b.id)}
+                        />
+                        <button
+                          onClick={() => handleKirimBalasan(b.id)}
+                          disabled={sendingBalasan[b.id]}
+                          className="bg-indigo-600 text-white px-4 rounded-xl text-[11px] font-black uppercase disabled:opacity-50"
+                        >
+                          Balas
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })
           )}
 
+          {/* FORM PERTANYAAN BARU */}
           <div className="flex gap-2 pt-1">
             <input
               type="text"
