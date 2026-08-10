@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { Gift, X, Sparkles, Heart, Flame, Download } from 'lucide-react';
+import { toast } from 'sonner';
 
 type BirthdayUser = {
   id: string;
@@ -85,6 +86,8 @@ export default function BirthdayOverlay() {
     if (typeof window === 'undefined' || sessionStorage.getItem(todayKey)) return;
 
     const cekUlangTahun = async () => {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+
       const { data, error } = await supabase
         .from('profiles')
         .select('id, nama, birthday_photo_url, birthday_date')
@@ -96,13 +99,33 @@ export default function BirthdayOverlay() {
       const yangUlangTahun = data.filter((u) => {
         const { month, day } = parseDateOnly(u.birthday_date as string);
         return day === today.getDate() && month === today.getMonth();
-      });
+      }) as BirthdayUser[];
 
-      if (yangUlangTahun.length > 0) {
-        setUsers(yangUlangTahun as BirthdayUser[]);
+      if (yangUlangTahun.length === 0) return;
+
+      // Pisahkan: diri sendiri (dapat overlay penuh) vs orang lain (dapat toast singkat saja)
+      const ulangTahunSaya = yangUlangTahun.filter((u) => u.id === currentUser?.id);
+      const ulangTahunOrangLain = yangUlangTahun.filter((u) => u.id !== currentUser?.id);
+
+      if (ulangTahunSaya.length > 0) {
+        setUsers(ulangTahunSaya);
         setVisible(true);
-        sessionStorage.setItem(todayKey, '1');
+      } else if (ulangTahunOrangLain.length > 0) {
+        if (ulangTahunOrangLain.length === 1) {
+          toast(`🎉 Hari ini ${ulangTahunOrangLain[0].nama.split(' ')[0]} lagi ulang tahun!`, {
+            description: 'Yuk kasih ucapan ke dia hari ini 💜',
+            duration: 8000,
+          });
+        } else {
+          const namaDepan = ulangTahunOrangLain.map((u) => u.nama.split(' ')[0]).join(', ');
+          toast(`🎉 Hari ini ada yang ulang tahun!`, {
+            description: `${namaDepan} lagi merayakan ulang tahun mereka hari ini 💜`,
+            duration: 8000,
+          });
+        }
       }
+
+      sessionStorage.setItem(todayKey, '1');
     };
 
     cekUlangTahun();
