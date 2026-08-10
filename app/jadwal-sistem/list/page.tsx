@@ -1,11 +1,11 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
-import { X, Gift, Calendar, Edit2, ChevronLeft, ChevronRight, Clock, MapPin, AlertTriangle } from 'lucide-react'
+import { X, Gift, Calendar, Edit2, ChevronLeft, ChevronRight, Clock, MapPin, AlertTriangle, ImagePlus, Loader2 } from 'lucide-react'
 
 interface JadwalTemplate {
   id: number;
-  hari: number; // 0 = Minggu ... 6 = Sabtu
+  hari: number;
   subject: string;
   time: string;
   room: string;
@@ -17,7 +17,7 @@ interface JadwalPengecualian {
   subject: string | null;
   time: string | null;
   room: string | null;
-  day: string; // YYYY-MM-DD
+  day: string;
   tipe: 'ganti' | 'tambahan' | 'libur';
   keterangan: string | null;
 }
@@ -43,13 +43,15 @@ export default function KalenderJadwal() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [hariIni] = useState(new Date())
 
-  // --- LOGIKA: State Manajemen Ulang Tahun (TETAP AMAN) ---
-  const [ultahUser, setUltahUser] = useState<string | null>(null) // Format: "MM-DD"
+  const [ultahUser, setUltahUser] = useState<string | null>(null)
   const [inputUltah, setInputUltah] = useState("")
   const [showUltahModal, setShowUltahModal] = useState(false)
-  const [showKejutanUltah, setShowKejutanUltah] = useState(false)
 
-  // --- LOGIKA DATA: Daftar Hari Penting & Libur Nasional Lengkap 2026 ---
+  const [fotoFile, setFotoFile] = useState<File | null>(null)
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null)
+  const [fotoUrlTersimpan, setFotoUrlTersimpan] = useState<string | null>(null)
+  const [menyimpan, setMenyimpan] = useState(false)
+
   const daftarHariPenting: Record<string, HariPenting> = {
     "2026-01-01": { nama: "Tahun Baru Masehi", isLibur: true },
     "2026-01-23": { nama: "Isra Mikraj Nabi Muhammad SAW", isLibur: true },
@@ -72,7 +74,6 @@ export default function KalenderJadwal() {
     "2026-12-25": { nama: "Hari Raya Natal", isLibur: true },
   }
 
-  // Bawaan Asli (TETAP AMAN)
   const [selectedJadwal, setSelectedJadwal] = useState<JadwalTampil[] | null>(null)
   const [selectedLiburInfo, setSelectedLiburInfo] = useState<string | null>(null)
   const [selectedDateLabel, setSelectedDateLabel] = useState("")
@@ -88,7 +89,6 @@ export default function KalenderJadwal() {
   const hariPertama = new Date(year, month, 1).getDay()
   const listHari = Array.from({ length: jumlahHari }, (_, i) => i + 1)
 
-  // --- Ambil kelas_id milik mahasiswa yang sedang login ---
   const getKelasId = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) {
@@ -105,7 +105,26 @@ export default function KalenderJadwal() {
     setLoadingKelas(false)
   }
 
-  // --- Fetching Jadwal Mingguan + Pengecualian, difilter per kelas ---
+  const getProfilUltah = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+
+    const { data } = await supabase
+      .from('profiles')
+      .select('birthday_date, birthday_photo_url')
+      .eq('id', session.user.id)
+      .maybeSingle()
+
+    if (data?.birthday_photo_url) setFotoUrlTersimpan(data.birthday_photo_url)
+
+    if (data?.birthday_date) {
+      const [, mm, dd] = data.birthday_date.split('-')
+      const formatUltah = `${mm}-${dd}`
+      localStorage.setItem('user_birthday', formatUltah)
+      setUltahUser(formatUltah)
+    }
+  }
+
   const getData = async (kelasIdParam: string) => {
     const { data: dTemplate } = await supabase
       .from('jadwal_template')
@@ -123,18 +142,16 @@ export default function KalenderJadwal() {
 
   useEffect(() => {
     getKelasId()
+    getProfilUltah()
 
-    // Cek Ulang Tahun di LocalStorage saat Pertama Masuk
     const savedUltah = localStorage.getItem('user_birthday')
     if (!savedUltah) {
       setShowUltahModal(true)
     } else {
       setUltahUser(savedUltah)
-      cekApakahHariIniUltah(savedUltah)
     }
   }, [])
 
-  // Realtime Subscriptions — nunggu kelasId ketemu dulu baru subscribe
   useEffect(() => {
     if (!kelasId) return
     getData(kelasId)
@@ -151,31 +168,63 @@ export default function KalenderJadwal() {
     return () => { supabase.removeChannel(sub) }
   }, [kelasId])
 
-  // Fungsi Pendukung Ulang Tahun (TETAP AMAN)
-  const simpanUlangThn = (e: React.FormEvent) => {
+  const handlePilihFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setFotoFile(file)
+    setFotoPreview(URL.createObjectURL(file))
+  }
+
+  const uploadFotoUltah = async (userId: string, file: File): Promise<string | null> => {
+    const ext = file.name.split('.').pop()
+    const path = `${userId}.${ext}`
+
+    const { error } = await supabase.storage
+      .from('birthday-photos')
+      .upload(path, file, { upsert: true })
+
+    if (error) return null
+
+    const { data } = supabase.storage.from('birthday-photos').getPublicUrl(path)
+    return data.publicUrl
+  }
+
+  const simpanUlangThn = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!inputUltah) return
-    const [_, mm, dd] = inputUltah.split('-')
+    setMenyimpan(true)
+
+    const [, mm, dd] = inputUltah.split('-')
     const formatUltah = `${mm}-${dd}`
     localStorage.setItem('user_birthday', formatUltah)
     setUltahUser(formatUltah)
-    setShowUltahModal(false)
-    cekApakahHariIniUltah(formatUltah)
-  }
 
-  const cekApakahHariIniUltah = (tanggalUltah: string) => {
-    const mHariIni = String(hariIni.getMonth() + 1).padStart(2, '0')
-    const tHariIni = String(hariIni.getDate()).padStart(2, '0')
-    if (`${mHariIni}-${tHariIni}` === tanggalUltah) {
-      setShowKejutanUltah(true)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      let fotoUrl = fotoUrlTersimpan
+
+      if (fotoFile) {
+        const hasilUpload = await uploadFotoUltah(session.user.id, fotoFile)
+        if (hasilUpload) fotoUrl = hasilUpload
+      }
+
+      await supabase
+        .from('profiles')
+        .update({ birthday_date: inputUltah, birthday_photo_url: fotoUrl })
+        .eq('id', session.user.id)
+
+      setFotoUrlTersimpan(fotoUrl)
     }
+
+    setMenyimpan(false)
+    setShowUltahModal(false)
+    setFotoFile(null)
   }
 
   const gantiBulan = (offset: number) => {
     setCurrentDate(new Date(year, month + offset, 1))
   }
 
-  // --- INTI LOGIKA GABUNGAN: Template Mingguan + Pengecualian Tanggal ---
   const getJadwalUntukTanggal = (tanggalFull: string, hariIndex: number): { list: JadwalTampil[]; liburInfo: string | null } => {
     const pengecualianHariIni = jadwalPengecualian.filter(p => p.day === tanggalFull)
     const liburEntry = pengecualianHariIni.find(p => p.tipe === 'libur')
@@ -187,7 +236,6 @@ export default function KalenderJadwal() {
     const gantiEntries = pengecualianHariIni.filter(p => p.tipe === 'ganti')
     const tambahanEntries = pengecualianHariIni.filter(p => p.tipe === 'tambahan')
 
-    // Kalau ada pengecualian tipe "ganti", jadwal mingguan hari itu diabaikan total
     const basis: JadwalTampil[] = gantiEntries.length > 0
       ? gantiEntries.map(p => ({
           key: `ganti-${p.id}`,
@@ -245,7 +293,6 @@ export default function KalenderJadwal() {
     <div className="min-h-screen bg-[#f7f7fb] dark:bg-[#0a0a0a] font-sans">
       <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
 
-        {/* Widget Akses Cepat Mengubah Ulang Tahun */}
         <div className="flex justify-between items-center flex-wrap gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Jadwal Kuliah</h1>
@@ -256,14 +303,12 @@ export default function KalenderJadwal() {
             className="flex items-center gap-2 text-xs font-bold bg-white dark:bg-[#141414] px-4 py-2.5 rounded-2xl shadow-sm border border-slate-100 dark:border-white/10 text-slate-500 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all active:scale-95"
           >
             <Edit2 size={12} />
-            {ultahUser ? 'Ubah Tanggal Ulang Tahun' : 'Atur Ulang Tahun'}
+            {ultahUser ? 'Ubah Tanggal & Foto Ulang Tahun' : 'Atur Ulang Tahun'}
           </button>
         </div>
 
-        {/* Kartu Kalender */}
         <div className="bg-white dark:bg-[#141414] rounded-[28px] shadow-sm border border-slate-100 dark:border-white/10 overflow-hidden">
 
-          {/* Header bulan */}
           <div className="flex justify-between items-center p-5 md:p-6 border-b border-slate-100 dark:border-white/10">
             <button
               onClick={() => gantiBulan(-1)}
@@ -284,7 +329,6 @@ export default function KalenderJadwal() {
             </button>
           </div>
 
-          {/* Header Nama Hari */}
           <div className="grid grid-cols-7 bg-slate-50 dark:bg-white/5 border-b border-slate-100 dark:border-white/10">
             {["Ming", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"].map((h, i) => (
               <div key={h} className={`py-2.5 text-center text-[10px] font-black uppercase tracking-wider ${i === 0 ? 'text-red-500' : 'text-slate-400'}`}>
@@ -293,7 +337,6 @@ export default function KalenderJadwal() {
             ))}
           </div>
 
-          {/* Grid Angka Tanggal */}
           <div className="grid grid-cols-7 gap-px bg-slate-100 dark:bg-white/5">
             {Array.from({ length: hariPertama }).map((_, i) => (
               <div key={`empty-${i}`} className="h-24 md:h-32 bg-slate-50/60 dark:bg-white/[0.02]"></div>
@@ -323,7 +366,6 @@ export default function KalenderJadwal() {
                     ${isHariIni ? 'ring-2 ring-inset ring-indigo-500' : ''}
                   `}
                 >
-                  {/* Top Row: Angka Tanggal, Icon Ultah & Indikator Hari Ini */}
                   <div className="flex justify-between items-start z-10">
                     <span className={`text-xs font-black h-6 w-6 flex items-center justify-center rounded-lg transition-all
                       ${isLibur ? 'bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400' :
@@ -341,7 +383,6 @@ export default function KalenderJadwal() {
                     </div>
                   </div>
 
-                  {/* Bottom Row: Hari Penting & Jadwal Kuliah */}
                   <div className="mt-1 flex-1 flex flex-col justify-end gap-1 z-10 overflow-hidden">
                     {detailHariPenting && (
                       <div className={`text-[9px] font-bold px-1.5 py-1 rounded-lg leading-tight text-center break-words
@@ -371,7 +412,6 @@ export default function KalenderJadwal() {
           </div>
         </div>
 
-        {/* MODAL INPUT TANGGAL ULANG TAHUN (Pop Up Awal - TETAP AMAN) */}
         {showUltahModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
             <div className="bg-white dark:bg-[#141414] w-full max-w-sm rounded-[28px] p-6 shadow-2xl border border-slate-100 dark:border-white/10 text-center space-y-4">
@@ -380,7 +420,7 @@ export default function KalenderJadwal() {
               </div>
               <div>
                 <h3 className="text-lg font-black text-slate-900 dark:text-white">Kapan Hari Ulang Tahunmu?</h3>
-                <p className="text-xs text-slate-400 mt-1">Kami ingin menyiapkan kejutan kecil spesial saat harinya tiba!</p>
+                <p className="text-xs text-slate-400 mt-1">Isi tanggal & upload 1 foto terbaikmu buat kejutan spesial saat harinya tiba!</p>
               </div>
               <form onSubmit={simpanUlangThn} className="space-y-3">
                 <input
@@ -389,6 +429,23 @@ export default function KalenderJadwal() {
                   onChange={(e) => setInputUltah(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-semibold text-slate-700 dark:text-slate-200"
                 />
+
+                <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-200 dark:border-white/10 rounded-2xl py-5 cursor-pointer hover:border-indigo-400 transition overflow-hidden">
+                  {(fotoPreview || fotoUrlTersimpan) ? (
+                    <img
+                      src={fotoPreview || fotoUrlTersimpan || ''}
+                      alt="Preview foto ulang tahun"
+                      className="w-20 h-20 rounded-full object-cover border-2 border-indigo-200 dark:border-indigo-500/30"
+                    />
+                  ) : (
+                    <ImagePlus size={22} className="text-slate-400" />
+                  )}
+                  <span className="text-[11px] font-bold text-slate-400">
+                    {fotoFile ? fotoFile.name : (fotoUrlTersimpan ? 'Ganti foto' : 'Upload 1 foto terbaikmu')}
+                  </span>
+                  <input type="file" accept="image/*" onChange={handlePilihFoto} className="hidden" />
+                </label>
+
                 <div className="flex gap-2">
                   {ultahUser && (
                     <button
@@ -401,9 +458,10 @@ export default function KalenderJadwal() {
                   )}
                   <button
                     type="submit"
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl text-xs shadow-md transition active:scale-95"
+                    disabled={menyimpan}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white font-bold py-3 rounded-xl text-xs shadow-md transition active:scale-95 flex items-center justify-center gap-2"
                   >
-                    Simpan & Ingat
+                    {menyimpan ? 'Menyimpan...' : 'Simpan & Ingat'}
                   </button>
                 </div>
               </form>
@@ -411,34 +469,6 @@ export default function KalenderJadwal() {
           </div>
         )}
 
-        {/* MODAL KEJUTAN ULANG TAHUN (TETAP AMAN) */}
-        {showKejutanUltah && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-            <div className="bg-gradient-to-b from-indigo-600 to-purple-600 w-full max-w-md rounded-[28px] p-8 text-center text-white relative shadow-2xl overflow-hidden border border-white/10">
-              <div className="absolute top-4 left-6 animate-bounce text-xl">✨</div>
-              <div className="absolute top-12 right-8 animate-pulse text-2xl">🎉</div>
-              <div className="absolute bottom-8 left-12 animate-bounce text-lg">🎈</div>
-
-              <div className="space-y-4 relative z-10">
-                <div className="inline-flex p-4 bg-white/15 rounded-full">
-                  <Gift size={40} className="text-white" />
-                </div>
-                <h2 className="text-3xl font-black tracking-wide">SELAMAT ULANG TAHUN! 🥳</h2>
-                <p className="text-sm font-medium opacity-90 leading-relaxed">
-                  Semoga harimu dipenuhi kebahagiaan, urusan perkuliahan berjalan lancar, dan semua impianmu segera terwujud! Tetap semangat belajar ya! 🚀
-                </p>
-                <button
-                  onClick={() => setShowKejutanUltah(false)}
-                  className="w-full bg-white text-indigo-700 font-black tracking-widest py-3.5 rounded-2xl text-xs shadow-xl hover:bg-slate-50 transition active:scale-95 uppercase"
-                >
-                  Terima Kasih Banyak!
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal Detail Jadwal Kuliah (Update: dukung info Libur & badge pengecualian) */}
         {selectedJadwal && (
           <div className="fixed inset-0 z-[99] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <div className="bg-white dark:bg-[#141414] w-full max-w-sm rounded-[28px] overflow-hidden shadow-2xl border border-slate-100 dark:border-white/10">
