@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from 'sonner';
 import Navbar from "@/components/Navbar";
 import ThemeEngine from "@/components/ThemeEngine";
+import BirthdayOverlay from "@/components/BirthdayOverlay";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -43,6 +44,7 @@ export default function RootLayout({
       >
         <ThemeEngine />
         <Navbar />
+        <BirthdayOverlay />
 
         <main className="relative z-10 md:pl-64 pt-16 md:pt-0 pb-[68px] md:pb-0">
           {children}
