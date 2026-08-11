@@ -5,6 +5,7 @@ import { Toaster } from 'sonner';
 import Navbar from "@/components/Navbar";
 import ThemeEngine from "@/components/ThemeEngine";
 import BirthdayOverlay from "@/components/BirthdayOverlay";
+import { AsistenZoraProvider } from "@/lib/asisten-zora-context";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -43,12 +44,17 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased transition-colors duration-700 bg-white dark:bg-[#0a0a0a] text-slate-900 dark:text-white`}
       >
         <ThemeEngine />
-        <Navbar />
-        <BirthdayOverlay />
 
-        <main className="relative z-10 md:pl-64 pt-16 md:pt-0 pb-[68px] md:pb-0">
-          {children}
-        </main>
+        {/* AsistenZoraProvider membungkus Navbar + seluruh halaman, biar status
+            on/off asisten Zora sinkron di mana pun (sidebar, bottom tab, Dashboard) */}
+        <AsistenZoraProvider>
+          <Navbar />
+          <BirthdayOverlay />
+
+          <main className="relative z-10 md:pl-64 pt-16 md:pt-0 pb-[68px] md:pb-0">
+            {children}
+          </main>
+        </AsistenZoraProvider>
 
         <Toaster position="top-center" richColors theme="system" />
       </body>
