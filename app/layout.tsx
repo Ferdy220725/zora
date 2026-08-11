@@ -19,9 +19,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Zora - Manajemen Agroteknologi C",
-  description: "Zora: Pusat informasi dan manajemen akademik mahasiswa Agroteknologi C. Dimana Bumi dan Ilmu Pengetahuan Bersatu.",
-  keywords: ["Zora", "Zoraferrs", "Agroteknologi", "UPN", "Manajemen Kelas", "Pertanian"],
+  title: "Zora - Sistem Manajemen Kelas",
+  description: "Zora: Pusat informasi dan manajemen kelas mahasiswa. Dimana Bumi dan Ilmu Pengetahuan Bersatu.",
+  keywords: ["Zora", "Zoraferrs", "Agroteknologi", "UPN", "Manajemen Kelas", "Pertanian", "simalas", "manajemen kelas", "Sistem Manajemen Kelas", "manajemen kelas", "zora", "ZORA", "Zora", "Kelas", "kelas"],
   verification: {
     google: ["googlec0409801ae0d1598", "-c_oKPxD--bqsEt7rMvILOccQIqJQfajX5CJUZQbxpM"],
   },
