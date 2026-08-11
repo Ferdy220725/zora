@@ -116,30 +116,30 @@ export default function Dashboard() {
     return () => clearInterval(zoomTimer);
   }, []);
 
-  // --- Ambil jadwal hari ini: gabungan jadwal_template (mingguan) + jadwal_kuliah (pengecualian) ---
-  const fetchJadwalHariIni = async (kelasIdParam: string) => {
-    const hariIndexHariIni = today.getDay(); // 0=Minggu...6=Sabtu, cocok sama kolom `hari` di jadwal_template
-
+  // --- Ambil jadwal buat SATU tanggal tertentu: gabungan jadwal_template (mingguan) + jadwal_kuliah (pengecualian) ---
+  // Dipakai buat "Jadwal Hari Ini" (kartu utama).
+  const fetchJadwalUntukTanggal = async (
+    kelasIdParam: string,
+    tanggalStr: string,
+    hariIndex: number
+  ): Promise<Jadwal[]> => {
     const { data: dTemplate } = await supabase
       .from('jadwal_template')
       .select('*')
       .eq('kelas_id', kelasIdParam)
       .eq('is_active', true)
-      .eq('hari', hariIndexHariIni);
+      .eq('hari', hariIndex);
 
     const { data: dPengecualian } = await supabase
       .from('jadwal_kuliah')
       .select('*')
       .eq('kelas_id', kelasIdParam)
-      .eq('day', todayStr);
+      .eq('day', tanggalStr);
 
     const liburEntry = dPengecualian?.find((p: any) => p.tipe === 'libur');
 
-    // Kalau hari ini ditandai libur oleh admin, jadwal mingguan diabaikan total
-    if (liburEntry) {
-      setJadwalHariIni([]);
-      return;
-    }
+    // Kalau hari itu ditandai libur oleh admin, jadwal mingguan diabaikan total
+    if (liburEntry) return [];
 
     const gantiEntries = dPengecualian?.filter((p: any) => p.tipe === 'ganti') || [];
     const tambahanEntries = dPengecualian?.filter((p: any) => p.tipe === 'tambahan') || [];
@@ -151,14 +151,14 @@ export default function Dashboard() {
           subject: p.subject || '-',
           time: p.time || '-',
           room: p.room || '-',
-          day: todayStr,
+          day: tanggalStr,
         }))
       : (dTemplate || []).map((t: any) => ({
           id: t.id,
           subject: t.subject,
           time: t.time,
           room: t.room || '-',
-          day: todayStr,
+          day: tanggalStr,
         }));
 
     const tambahan: Jadwal[] = tambahanEntries.map((p: any) => ({
@@ -166,10 +166,15 @@ export default function Dashboard() {
       subject: p.subject || '-',
       time: p.time || '-',
       room: p.room || '-',
-      day: todayStr,
+      day: tanggalStr,
     }));
 
-    setJadwalHariIni([...basis, ...tambahan].sort((a, b) => a.time.localeCompare(b.time)));
+    return [...basis, ...tambahan].sort((a, b) => a.time.localeCompare(b.time));
+  };
+
+  const fetchJadwalHariIni = async (kelasIdParam: string) => {
+    const hasil = await fetchJadwalUntukTanggal(kelasIdParam, todayStr, today.getDay());
+    setJadwalHariIni(hasil);
   };
 
   const fetchDataAndSync = async () => {
@@ -195,8 +200,9 @@ export default function Dashboard() {
 
     const { data: { user } } = await supabase.auth.getUser();
 
+    let selesaiIds: string[] = [];
+
     if (user) {
-      // Ambil kelas_id user di sini — dipakai buat jadwal hari ini & saat submit bukti tugas
       const { data: profile } = await supabase
         .from('profiles')
         .select('kelas_id')
@@ -226,6 +232,7 @@ export default function Dashboard() {
 
         setRiwayatBukti(buktiMap);
         setCompletedTaskIds(completedIdsFromDB);
+        selesaiIds = completedIdsFromDB;
         localStorage.setItem('ZORA_completed_tasks', JSON.stringify(completedIdsFromDB));
       }
     } else {
