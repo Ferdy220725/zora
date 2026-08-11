@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import AsistenZoraSwitch from "@/components/AsistenZoraSwitch";
+import AsistenZoraTabButton from "@/components/AsistenZoraTabButton";
 import {
   LayoutDashboard,
   ClipboardCheck,
@@ -23,7 +25,6 @@ import {
   School,
   Menu,
   X,
-  Bell,
   User,
   QrCode,
 } from "lucide-react";
@@ -79,12 +80,12 @@ const footerNavItems: NavItem[] = [
   },
 ];
 
-// 5 item utama buat bottom tab bar mobile (Zora AI selalu di tengah)
+// 5 item utama buat bottom tab bar mobile (Pengumuman selalu di tengah)
 const mobileTabItems: NavItem[] = [
   { id: "dashboard", name: "Dashboard", href: "/dashboard", icon: <LayoutDashboard size={22} /> },
   { id: "kalender", name: "Kalender", href: "/jadwal-sistem/list", icon: <CalendarDays size={22} /> },
-  { id: "zora-ai", name: "Zora AI", href: "/zora-ai", icon: <Sparkles size={24} />, comingSoon: true },
-  { id: "notifikasi", name: "Notifikasi", href: "/notifikasi", icon: <Bell size={22} />, comingSoon: true },
+  { id: "pengumuman", name: "Pengumuman", href: "/pengumuman", icon: <Megaphone size={24} /> },
+  { id: "asisten-zora", name: "Asisten", href: "", icon: <Sparkles size={22} /> },
   { id: "profil", name: "Profil", href: "/akun-saya", icon: <User size={22} /> },
 ];
 
@@ -205,21 +206,16 @@ export default function Navbar() {
 
         <div className="px-3 pb-3">
           <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl p-4 text-white mb-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles size={16} />
-              <p className="text-xs font-black uppercase tracking-wide">Zora AI Assistant</p>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-2">
+                <Sparkles size={16} />
+                <p className="text-xs font-black uppercase tracking-wide">Asisten Zora</p>
+              </div>
+              <AsistenZoraSwitch />
             </div>
-            <p className="text-[11px] text-indigo-100 mb-3">
-              Tanya apa saja seputar perkuliahan!
+            <p className="text-[11px] text-indigo-100 leading-relaxed">
+              Sapaan otomatis + jadwal, tugas, dan agenda kamu tiap buka Zora.
             </p>
-            <button
-              onClick={(e) =>
-                handleItemClick(mainNavItems.find((i) => i.id === "zora-ai")!, e as any)
-              }
-              className="w-full bg-white/15 hover:bg-white/25 backdrop-blur-sm rounded-xl py-2 text-xs font-bold transition-all"
-            >
-              Chat dengan AI →
-            </button>
           </div>
 
           <div className="space-y-1 pt-2 border-t border-slate-100 dark:border-white/10">
@@ -244,19 +240,6 @@ export default function Navbar() {
             </div>
             <span className="font-black text-lg text-slate-900 dark:text-white tracking-tight">ZORA</span>
           </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Link
-            href="/notifikasi"
-            onClick={(e) => handleItemClick({ id: "notif", name: "Notifikasi", href: "/notifikasi", icon: null, comingSoon: true }, e)}
-            className="relative w-9 h-9 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-700 dark:text-slate-200"
-          >
-            <Bell size={16} />
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
-              3
-            </span>
-          </Link>
         </div>
       </header>
 
@@ -295,7 +278,7 @@ export default function Navbar() {
       {/* ================= MOBILE BOTTOM TAB BAR ================= */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 h-[68px] bg-white/95 dark:bg-[#0d0d0d]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/10 flex items-center justify-around px-2">
         {mobileTabItems.map((item) =>
-          item.id === "zora-ai" ? (
+          item.id === "pengumuman" ? (
             <Link
               key={item.id}
               href={item.href}
@@ -304,6 +287,8 @@ export default function Navbar() {
             >
               {item.icon}
             </Link>
+          ) : item.id === "asisten-zora" ? (
+            <AsistenZoraTabButton key={item.id} />
           ) : (
             <Link
               key={item.id}
