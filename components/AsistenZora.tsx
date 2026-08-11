@@ -55,12 +55,12 @@ export default function AsistenZora({ namaUser, isDayWindow, jadwal, tugas, agen
       <p className="text-lg md:text-xl font-semibold text-slate-900 dark:text-white">
         {greetWord()}, {namaUser}
       </p>
-      <p className="text-sm text-slate-400 mt-1 mb-5">
+      <p className="text-sm text-slate-500 dark:text-slate-300 mt-1 mb-5">
         {isDayWindow ? "Ini agenda kamu hari ini." : "Kelas hari ini sudah lewat, ini jadwal besok."}
       </p>
 
       {semuaKosong ? (
-        <p className="text-sm text-slate-400 py-6">
+        <p className="text-sm text-slate-500 dark:text-slate-300 py-6">
           {isDayWindow ? "Tidak ada jadwal atau tugas hari ini 🎉" : "Belum ada jadwal untuk besok."}
         </p>
       ) : (
@@ -72,9 +72,9 @@ export default function AsistenZora({ namaUser, isDayWindow, jadwal, tugas, agen
                   key={j.id}
                   className={`flex items-center gap-3 py-3 ${i > 0 ? "border-t border-slate-100 dark:border-white/10" : ""}`}
                 >
-                  <span className="text-sm text-slate-500 dark:text-slate-400 min-w-[48px]">{j.time}</span>
-                  <p className="flex-1 text-sm text-slate-800 dark:text-slate-100">{j.subject}</p>
-                  <span className="text-xs text-slate-400">{j.room}</span>
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 min-w-[48px]">{j.time}</span>
+                  <p className="flex-1 text-sm font-medium text-slate-900 dark:text-white">{j.subject}</p>
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-300">{j.room}</span>
                 </div>
               ))}
             </div>
@@ -82,16 +82,16 @@ export default function AsistenZora({ namaUser, isDayWindow, jadwal, tugas, agen
 
           {tugas.length > 0 && (
             <div className="text-left mt-5">
-              <p className="text-xs text-slate-400 mb-2">Tugas belum selesai</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-300 mb-2">Tugas belum selesai</p>
               {tugas.map((t) => (
                 <div key={t.id} className="flex items-center gap-2 py-1.5">
                   <span
                     className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                      t.urgent ? "bg-red-500" : "bg-slate-300 dark:bg-white/20"
+                      t.urgent ? "bg-red-500" : "bg-slate-400 dark:bg-white/30"
                     }`}
                   />
-                  <p className="flex-1 text-sm text-slate-800 dark:text-slate-100 truncate">{t.judul_tugas}</p>
-                  <span className={`text-xs flex-shrink-0 ${t.urgent ? "text-red-500 font-semibold" : "text-slate-400"}`}>
+                  <p className="flex-1 text-sm font-medium text-slate-900 dark:text-white truncate">{t.judul_tugas}</p>
+                  <span className={`text-xs flex-shrink-0 font-semibold ${t.urgent ? "text-red-500" : "text-slate-500 dark:text-slate-300"}`}>
                     {t.deadline}
                   </span>
                 </div>
@@ -101,16 +101,16 @@ export default function AsistenZora({ namaUser, isDayWindow, jadwal, tugas, agen
 
           {agenda.length > 0 && (
             <div className="text-left mt-5">
-              <p className="text-xs text-slate-400 mb-2">Agenda lainnya</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-300 mb-2">Agenda lainnya</p>
               {agenda.map((a) => (
                 <div key={a.id} className="flex items-center gap-2 py-1.5">
                   {a.tipe === "zoom" ? (
-                    <Video size={14} className="text-slate-400 flex-shrink-0" />
+                    <Video size={14} className="text-slate-500 dark:text-slate-300 flex-shrink-0" />
                   ) : (
-                    <FlaskConical size={14} className="text-slate-400 flex-shrink-0" />
+                    <FlaskConical size={14} className="text-slate-500 dark:text-slate-300 flex-shrink-0" />
                   )}
-                  <p className="flex-1 text-sm text-slate-800 dark:text-slate-100 truncate">{a.label}</p>
-                  <span className="text-xs text-slate-400 flex-shrink-0">{a.waktu}</span>
+                  <p className="flex-1 text-sm font-medium text-slate-900 dark:text-white truncate">{a.label}</p>
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-300 flex-shrink-0">{a.waktu}</span>
                 </div>
               ))}
             </div>
