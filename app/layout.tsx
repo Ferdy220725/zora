@@ -5,6 +5,7 @@ import { Toaster } from 'sonner';
 import Navbar from "@/components/Navbar";
 import ThemeEngine from "@/components/ThemeEngine";
 import BirthdayOverlay from "@/components/BirthdayOverlay";
+import AsistenZoraOverlay from "@/components/AsistenZoraOverlay";
 import { AsistenZoraProvider } from "@/lib/asisten-zora-context";
 
 const geistSans = Geist({
@@ -50,6 +51,7 @@ export default function RootLayout({
         <AsistenZoraProvider>
           <Navbar />
           <BirthdayOverlay />
+          <AsistenZoraOverlay />
 
           <main className="relative z-10 md:pl-64 pt-16 md:pt-0 pb-[68px] md:pb-0">
             {children}
