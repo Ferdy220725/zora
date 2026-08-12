@@ -27,6 +27,7 @@ import {
   X,
   User,
   QrCode,
+  Award,
 } from "lucide-react";
 
 interface NavItem {
@@ -50,6 +51,7 @@ const mainNavItems: NavItem[] = [
   { id: "kalender", name: "Kalender Akademik", href: "/jadwal-sistem/list", icon: <CalendarDays size={20} /> },
   { id: "zora-ai", name: "Zora AI", href: "/zora-ai", icon: <Sparkles size={20} />, comingSoon: true },
   { id: "pengumuman", name: "Pengumuman", href: "/pengumuman", icon: <Megaphone size={20} /> },
+  { id: "beasiswa", name: "Beasiswa", href: "/beasiswa", icon: <Award size={20} /> }, // ⬅️ menu baru
   { id: "laporan", name: "Laporan", href: "/laporan", icon: <ClipboardList size={20} /> },
   { id: "profil", name: "Profil", href: "/akun-saya", icon: <User size={22} /> },
   {
