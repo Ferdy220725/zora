@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -13,7 +12,8 @@ export default function SuperAdminPage() {
   const [pendingList, setPendingList] = useState<any[]>([]);
   const [adminList, setAdminList] = useState<any[]>([]);
   const [ownerLoading, setOwnerLoading] = useState(false);
-  const [view, setView] = useState<'WEB' | 'ABSEN' | 'JADWAL'>('WEB');
+  const [ownerShowBeasiswa, setOwnerShowBeasiswa] = useState(false);
+  const [view, setView] = useState<'WEB' | 'ABSEN' | 'JADWAL' | 'BEASISWA'>('WEB');
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -82,6 +82,48 @@ export default function SuperAdminPage() {
   const [linkPengumuman, setLinkPengumuman] = useState('');
   const [pinPengumuman, setPinPengumuman] = useState(false);
 
+  // --- STATE BEASISWA ---
+  const [beasiswaList, setBeasiswaList] = useState<any[]>([]);
+  const [beasiswaShowArchived, setBeasiswaShowArchived] = useState(false);
+  const jenjangOptions = ['D3', 'D4', 'S1', 'S2'];
+  const kategoriOptions = [
+    { value: 'akademik', label: 'Akademik' },
+    { value: 'ekonomi', label: 'Ekonomi' },
+    { value: 'prestasi', label: 'Prestasi' },
+    { value: 'organisasi', label: 'Organisasi' },
+    { value: 'kepemimpinan', label: 'Kepemimpinan' },
+    { value: 'riset', label: 'Riset' },
+    { value: 'khusus_daerah', label: 'Khusus Daerah' },
+    { value: 'lainnya', label: 'Lainnya' },
+  ];
+  const verifikasiOptions = [
+    { value: 'unverified', label: 'Unverified' },
+    { value: 'verified_external', label: 'Verified (Eksternal)' },
+    { value: 'official', label: 'Official Source' },
+    { value: 'upn_verified', label: 'UPN Verified' },
+  ];
+
+  const [namaBeasiswa, setNamaBeasiswa] = useState('');
+  const [penyelenggaraBeasiswa, setPenyelenggaraBeasiswa] = useState('');
+  const [logoBeasiswa, setLogoBeasiswa] = useState('');
+  const [deskripsiBeasiswa, setDeskripsiBeasiswa] = useState('');
+  const [kategoriBeasiswa, setKategoriBeasiswa] = useState('lainnya');
+  const [jenjangBeasiswa, setJenjangBeasiswa] = useState<string[]>([]);
+  const [tglBukaBeasiswa, setTglBukaBeasiswa] = useState('');
+  const [tglTutupBeasiswa, setTglTutupBeasiswa] = useState('');
+  const [jamTutupBeasiswa, setJamTutupBeasiswa] = useState('');
+  const [nominalBeasiswa, setNominalBeasiswa] = useState('');
+  const [wilayahBeasiswa, setWilayahBeasiswa] = useState('');
+  const [sumberResmiBeasiswa, setSumberResmiBeasiswa] = useState('');
+  const [linkDaftarBeasiswa, setLinkDaftarBeasiswa] = useState('');
+  const [statusVerifikasiBeasiswa, setStatusVerifikasiBeasiswa] = useState('unverified');
+  const [ipkMinBeasiswa, setIpkMinBeasiswa] = useState('');
+  const [semesterMinBeasiswa, setSemesterMinBeasiswa] = useState('');
+  const [semesterMaxBeasiswa, setSemesterMaxBeasiswa] = useState('');
+  const [fakultasBeasiswa, setFakultasBeasiswa] = useState('');
+  const [prodiBeasiswa, setProdiBeasiswa] = useState('');
+  const [dokumenBeasiswa, setDokumenBeasiswa] = useState(''); // dipisah koma
+
   // --- HELPER ---
   const formatToWIB = (dateString: string) => {
     if (!dateString) return null;
@@ -98,6 +140,22 @@ export default function SuperAdminPage() {
     } catch {
       return dateString;
     }
+  };
+
+  // Status beasiswa dihitung on-the-fly dari tanggal, bukan disimpan manual
+  const hitungStatusBeasiswa = (b: any): 'buka' | 'segera_buka' | 'tutup' => {
+    const now = new Date();
+    const start = new Date(`${b.application_start}T00:00:00+07:00`);
+    const deadline = new Date(`${b.application_deadline}T${b.application_deadline_time || '23:59:59'}+07:00`);
+    if (now < start) return 'segera_buka';
+    if (now > deadline) return 'tutup';
+    return 'buka';
+  };
+
+  const labelStatusBeasiswa = (status: 'buka' | 'segera_buka' | 'tutup') => {
+    if (status === 'buka') return { text: '🟢 DIBUKA', className: 'bg-green-100 text-green-700' };
+    if (status === 'segera_buka') return { text: '🟡 SEGERA', className: 'bg-amber-100 text-amber-700' };
+    return { text: '🔴 TUTUP', className: 'bg-red-100 text-red-600' };
   };
 
   // --- CEK SESI LOGIN SAAT HALAMAN DIBUKA ---
@@ -275,11 +333,22 @@ export default function SuperAdminPage() {
         .order('day', { ascending: true });
       if (dPengecualian) setJadwalPengecualian(dPengecualian);
     }
+
+    if (view === 'BEASISWA') {
+      // Beasiswa bersifat lintas-kelas (bukan di-scope kelas_id), admin & owner
+      // sama-sama bisa lihat semua lewat is_admin() di RLS.
+      const { data: dBeasiswa } = await supabase
+        .from('scholarships')
+        .select('*')
+        .eq('is_active', !beasiswaShowArchived)
+        .order('application_deadline', { ascending: true });
+      if (dBeasiswa) setBeasiswaList(dBeasiswa);
+    }
   };
 
   useEffect(() => {
-    if (adminProfile && adminProfile.role === 'admin') fetchData();
-  }, [adminProfile, view]);
+    if (adminProfile && ['admin', 'owner'].includes(adminProfile.role)) fetchData();
+  }, [adminProfile, view, beasiswaShowArchived]);
 
   // --- HANDLER VERIFIKASI MAHASISWA ---
   const handleApproveStudent = async (id: string, nama: string, statusSaatIni: boolean) => {
@@ -422,26 +491,29 @@ export default function SuperAdminPage() {
     if (!judulMateri.trim()) return alert("Judul materi tidak boleh kosong!");
     if (!mkMateri.trim()) return alert("Nama Mata Kuliah tidak boleh kosong!");
     if (!semesterMateri) return alert("Semester harus diisi!");
+    if (file.type !== 'application/pdf') return alert("File materi harus berformat PDF!");
 
     try {
-      const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
-      const { error: storageError } = await supabase.storage
-        .from('uploads')
-        .upload(fileName, file);
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
 
-      if (storageError) {
-        console.error("Storage Error:", storageError);
-        return alert("Gagal Upload File ke Storage: " + storageError.message);
+      const uploadRes = await fetch('/api/upload-drive', {
+        method: 'POST',
+        body: uploadFormData,
+      });
+
+      const uploadResult = await uploadRes.json();
+
+      if (!uploadRes.ok || !uploadResult.fileId) {
+        console.error("Drive Upload Error:", uploadResult.error);
+        return alert("Gagal Upload File ke Drive: " + (uploadResult.error || "Unknown error"));
       }
 
-      const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(fileName);
-      if (!urlData?.publicUrl) {
-        return alert("Gagal mendapatkan URL file dari storage.");
-      }
+      const fileId = uploadResult.fileId;
 
       const { error: dbError } = await supabase.from('materi').insert([{
         judul: judulMateri.trim(),
-        file_url: urlData.publicUrl,
+        file_url: fileId,
         mk_nama: mkMateri.trim(),
         semester: parseInt(semesterMateri),
         kelas_id: adminProfile.kelas_id,
@@ -449,7 +521,7 @@ export default function SuperAdminPage() {
 
       if (dbError) {
         console.error("Database Error:", dbError);
-        return alert("File terupload, tapi GAGAL simpan ke Database: " + dbError.message + " (kolom kelas_id mungkin belum ada di tabel materi — cek lagi skemanya)");
+        return alert("File terupload ke Drive, tapi GAGAL simpan ke Database: " + dbError.message);
       }
 
       alert("Materi Berhasil Diunggah dan Disimpan!");
@@ -458,8 +530,7 @@ export default function SuperAdminPage() {
         `📄 <b>MATERI BARU DIUNGGAH</b>\n` +
         `Matkul: <b>${mkMateri.trim()}</b>\n` +
         `Judul: ${judulMateri.trim()}\n` +
-        `Semester: ${semesterMateri}\n` +
-        `Link: ${urlData.publicUrl}`
+        `Semester: ${semesterMateri}`
       );
 
       setJudulMateri('');
@@ -574,6 +645,103 @@ export default function SuperAdminPage() {
     fetchData();
   };
 
+  // --- HANDLER BEASISWA ---
+  const toggleJenjangBeasiswa = (level: string) => {
+    setJenjangBeasiswa((prev) =>
+      prev.includes(level) ? prev.filter((l) => l !== level) : [...prev, level]
+    );
+  };
+
+  const resetFormBeasiswa = () => {
+    setNamaBeasiswa(''); setPenyelenggaraBeasiswa(''); setLogoBeasiswa(''); setDeskripsiBeasiswa('');
+    setKategoriBeasiswa('lainnya'); setJenjangBeasiswa([]); setTglBukaBeasiswa(''); setTglTutupBeasiswa('');
+    setJamTutupBeasiswa(''); setNominalBeasiswa(''); setWilayahBeasiswa(''); setSumberResmiBeasiswa('');
+    setLinkDaftarBeasiswa(''); setStatusVerifikasiBeasiswa('unverified'); setIpkMinBeasiswa('');
+    setSemesterMinBeasiswa(''); setSemesterMaxBeasiswa(''); setFakultasBeasiswa(''); setProdiBeasiswa('');
+    setDokumenBeasiswa('');
+  };
+
+  const handlePostBeasiswa = async () => {
+    if (!adminProfile) return;
+    if (!namaBeasiswa.trim() || !penyelenggaraBeasiswa.trim()) {
+      return alert("Isi Nama Beasiswa & Penyelenggara!");
+    }
+    if (!tglBukaBeasiswa || !tglTutupBeasiswa) {
+      return alert("Isi Tanggal Buka & Deadline!");
+    }
+    if (tglTutupBeasiswa < tglBukaBeasiswa) {
+      return alert("Deadline tidak boleh sebelum Tanggal Buka!");
+    }
+    if (!sumberResmiBeasiswa.trim() && !linkDaftarBeasiswa.trim()) {
+      return alert("Isi minimal salah satu: URL Sumber Resmi atau Link Pendaftaran!");
+    }
+
+    const { data: inserted, error } = await supabase.from('scholarships').insert([{
+      name: namaBeasiswa.trim(),
+      provider_name: penyelenggaraBeasiswa.trim(),
+      provider_logo_url: logoBeasiswa.trim() || null,
+      description: deskripsiBeasiswa.trim() || null,
+      category: kategoriBeasiswa,
+      education_level: jenjangBeasiswa,
+      application_start: tglBukaBeasiswa,
+      application_deadline: tglTutupBeasiswa,
+      application_deadline_time: jamTutupBeasiswa || null,
+      amount: nominalBeasiswa ? Number(nominalBeasiswa) : null,
+      region: wilayahBeasiswa.trim() || null,
+      official_source_url: sumberResmiBeasiswa.trim() || null,
+      registration_url: linkDaftarBeasiswa.trim() || null,
+      verification_status: statusVerifikasiBeasiswa,
+      min_ipk: ipkMinBeasiswa ? Number(ipkMinBeasiswa) : null,
+      min_semester: semesterMinBeasiswa ? Number(semesterMinBeasiswa) : null,
+      max_semester: semesterMaxBeasiswa ? Number(semesterMaxBeasiswa) : null,
+      eligible_faculties: fakultasBeasiswa.trim()
+        ? fakultasBeasiswa.split(',').map((s) => s.trim()).filter(Boolean)
+        : null,
+      eligible_programs: prodiBeasiswa.trim()
+        ? prodiBeasiswa.split(',').map((s) => s.trim()).filter(Boolean)
+        : null,
+      created_by: adminProfile.id,
+      ...(statusVerifikasiBeasiswa !== 'unverified'
+        ? { last_verified_at: new Date().toISOString(), verified_by: adminProfile.id }
+        : {}),
+    }]).select('id').single();
+
+    if (error || !inserted) {
+      return alert("Gagal menambah beasiswa: " + error?.message);
+    }
+
+    // Simpan checklist dokumen kalau diisi (dipisah koma)
+    if (dokumenBeasiswa.trim()) {
+      const daftarDokumen = dokumenBeasiswa.split(',').map((s) => s.trim()).filter(Boolean);
+      const rows = daftarDokumen.map((label, i) => ({
+        scholarship_id: inserted.id,
+        document_label: label,
+        sort_order: i,
+      }));
+      await supabase.from('scholarship_documents').insert(rows);
+    }
+
+    alert("Beasiswa Berhasil Ditambahkan!");
+    resetFormBeasiswa();
+    fetchData();
+  };
+
+  const toggleArsipBeasiswa = async (id: string, statusAktifSaatIni: boolean) => {
+    const { error } = await supabase
+      .from('scholarships')
+      .update({ is_active: !statusAktifSaatIni })
+      .eq('id', id);
+    if (error) return alert("Gagal mengubah status arsip: " + error.message);
+    fetchData();
+  };
+
+  const handleDeleteBeasiswa = async (id: string, nama: string) => {
+    if (!confirm(`Hapus PERMANEN beasiswa "${nama}"? Kalau cuma mau sembunyikan, pakai tombol Arsipkan aja.`)) return;
+    const { error } = await supabase.from('scholarships').delete().eq('id', id);
+    if (error) return alert("Gagal menghapus: " + error.message);
+    fetchData();
+  };
+
   const downloadPDF = async (data: any) => {
     const doc = new jsPDF();
     doc.setFont("times", "bold");
@@ -664,6 +832,161 @@ export default function SuperAdminPage() {
     return Object.entries(rekap);
   };
 
+  // --- BLOK UI BEASISWA (dipakai di panel Admin & panel Owner) ---
+  const renderBeasiswaSection = () => (
+    <div className="space-y-8">
+      <div className="bg-white p-6 rounded-3xl shadow-sm border-t-8 border-teal-600">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-black text-teal-700 uppercase text-xs flex items-center gap-2">
+            <span>🎓</span> Tambah Beasiswa
+          </h2>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-3 mb-3">
+          <input type="text" placeholder="Nama Beasiswa" className="w-full border p-3 rounded-xl text-xs text-black" value={namaBeasiswa} onChange={e => setNamaBeasiswa(e.target.value)} />
+          <input type="text" placeholder="Penyelenggara" className="w-full border p-3 rounded-xl text-xs text-black" value={penyelenggaraBeasiswa} onChange={e => setPenyelenggaraBeasiswa(e.target.value)} />
+        </div>
+
+        <input type="text" placeholder="URL Logo Penyelenggara (opsional)" className="w-full border p-3 mb-3 rounded-xl text-xs text-black" value={logoBeasiswa} onChange={e => setLogoBeasiswa(e.target.value)} />
+
+        <textarea placeholder="Deskripsi beasiswa..." className="w-full border p-3 mb-3 rounded-xl text-xs min-h-[80px] text-black" value={deskripsiBeasiswa} onChange={e => setDeskripsiBeasiswa(e.target.value)} />
+
+        <div className="grid md:grid-cols-2 gap-3 mb-3">
+          <div>
+            <p className="text-[9px] font-black uppercase mb-1 text-slate-400">Kategori</p>
+            <select className="w-full border p-3 rounded-xl text-xs font-bold text-black" value={kategoriBeasiswa} onChange={e => setKategoriBeasiswa(e.target.value)}>
+              {kategoriOptions.map(k => <option key={k.value} value={k.value}>{k.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase mb-1 text-slate-400">Jenjang</p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {jenjangOptions.map(level => (
+                <button
+                  key={level}
+                  type="button"
+                  onClick={() => toggleJenjangBeasiswa(level)}
+                  className={`px-3 py-2 rounded-lg text-[10px] font-black ${jenjangBeasiswa.includes(level) ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}`}
+                >
+                  {level}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-3 mb-3">
+          <div>
+            <p className="text-[9px] font-black uppercase mb-1 text-slate-400">Tanggal Buka</p>
+            <input type="date" className="w-full border p-3 rounded-xl text-xs text-black" value={tglBukaBeasiswa} onChange={e => setTglBukaBeasiswa(e.target.value)} />
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase mb-1 text-slate-400">Deadline</p>
+            <input type="date" className="w-full border p-3 rounded-xl text-xs text-black" value={tglTutupBeasiswa} onChange={e => setTglTutupBeasiswa(e.target.value)} />
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase mb-1 text-slate-400">Jam Deadline (opsional)</p>
+            <input type="time" className="w-full border p-3 rounded-xl text-xs text-black" value={jamTutupBeasiswa} onChange={e => setJamTutupBeasiswa(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-3 mb-3">
+          <input type="number" placeholder="Nominal Bantuan (Rp, opsional)" className="w-full border p-3 rounded-xl text-xs text-black" value={nominalBeasiswa} onChange={e => setNominalBeasiswa(e.target.value)} />
+          <input type="text" placeholder="Wilayah (mis. Jawa Timur)" className="w-full border p-3 rounded-xl text-xs text-black" value={wilayahBeasiswa} onChange={e => setWilayahBeasiswa(e.target.value)} />
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-3 mb-3">
+          <input type="number" step="0.01" placeholder="IPK Minimum" className="w-full border p-3 rounded-xl text-xs text-black" value={ipkMinBeasiswa} onChange={e => setIpkMinBeasiswa(e.target.value)} />
+          <input type="number" placeholder="Min. Semester" className="w-full border p-3 rounded-xl text-xs text-black" value={semesterMinBeasiswa} onChange={e => setSemesterMinBeasiswa(e.target.value)} />
+          <input type="number" placeholder="Maks. Semester" className="w-full border p-3 rounded-xl text-xs text-black" value={semesterMaxBeasiswa} onChange={e => setSemesterMaxBeasiswa(e.target.value)} />
+        </div>
+
+        <input type="text" placeholder="Fakultas Eligible, pisah koma (kosongkan = semua)" className="w-full border p-3 mb-3 rounded-xl text-xs text-black" value={fakultasBeasiswa} onChange={e => setFakultasBeasiswa(e.target.value)} />
+        <input type="text" placeholder="Program Studi Eligible, pisah koma (kosongkan = semua)" className="w-full border p-3 mb-3 rounded-xl text-xs text-black" value={prodiBeasiswa} onChange={e => setProdiBeasiswa(e.target.value)} />
+        <input type="text" placeholder="Checklist Dokumen, pisah koma (mis. KTP, KTM, Transkrip Nilai)" className="w-full border p-3 mb-3 rounded-xl text-xs bg-teal-50 text-black" value={dokumenBeasiswa} onChange={e => setDokumenBeasiswa(e.target.value)} />
+
+        <div className="grid md:grid-cols-2 gap-3 mb-3">
+          <input type="text" placeholder="URL Sumber Resmi" className="w-full border p-3 rounded-xl text-xs bg-blue-50 text-black" value={sumberResmiBeasiswa} onChange={e => setSumberResmiBeasiswa(e.target.value)} />
+          <input type="text" placeholder="Link Pendaftaran" className="w-full border p-3 rounded-xl text-xs bg-blue-50 text-black" value={linkDaftarBeasiswa} onChange={e => setLinkDaftarBeasiswa(e.target.value)} />
+        </div>
+
+        <div className="mb-4">
+          <p className="text-[9px] font-black uppercase mb-1 text-slate-400">Status Verifikasi</p>
+          <select className="w-full border p-3 rounded-xl text-xs font-bold text-black" value={statusVerifikasiBeasiswa} onChange={e => setStatusVerifikasiBeasiswa(e.target.value)}>
+            {verifikasiOptions.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
+          </select>
+          <p className="text-[9px] text-slate-400 mt-1">Pilih selain Unverified akan otomatis set &quot;Terakhir diverifikasi&quot; ke hari ini.</p>
+        </div>
+
+        <button onClick={handlePostBeasiswa} className="w-full bg-teal-600 text-white py-3 rounded-xl font-black text-xs shadow-md">TAMBAHKAN BEASISWA</button>
+      </div>
+
+      <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-black text-xs uppercase text-slate-400">Daftar Beasiswa</h3>
+          <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
+            <button
+              onClick={() => setBeasiswaShowArchived(false)}
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase ${!beasiswaShowArchived ? 'bg-teal-600 text-white' : 'text-slate-500'}`}
+            >
+              Aktif
+            </button>
+            <button
+              onClick={() => setBeasiswaShowArchived(true)}
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase ${beasiswaShowArchived ? 'bg-teal-600 text-white' : 'text-slate-500'}`}
+            >
+              Diarsipkan
+            </button>
+          </div>
+        </div>
+
+        {beasiswaList.length === 0 ? (
+          <p className="text-[10px] font-bold text-slate-400 italic">
+            {beasiswaShowArchived ? 'Belum ada beasiswa diarsipkan.' : 'Belum ada beasiswa aktif.'}
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {beasiswaList.map((b) => {
+              const status = hitungStatusBeasiswa(b);
+              const statusLabel = labelStatusBeasiswa(status);
+              return (
+                <div key={b.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-black uppercase text-slate-800 truncate">{b.name}</p>
+                      <p className="text-[9px] font-bold text-slate-500">{b.provider_name}</p>
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${statusLabel.className}`}>{statusLabel.text}</span>
+                        <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">{b.verification_status}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => toggleArsipBeasiswa(b.id, b.is_active)}
+                        className="px-3 py-2 rounded-lg text-[8px] font-black uppercase bg-amber-100 text-amber-700"
+                      >
+                        {b.is_active ? 'Arsipkan' : 'Aktifkan'}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBeasiswa(b.id, b.name)}
+                        className="px-3 py-2 rounded-lg text-[8px] font-black uppercase bg-red-500 text-white"
+                      >
+                        Hapus
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-[9px] text-slate-400 mt-2">
+                    Deadline: {formatTanggalTampil(`${b.application_deadline}T${(b.application_deadline_time || '23:59')}`)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   // --- LOADING SESI ---
   if (checkingAuth) {
     return (
@@ -740,39 +1063,56 @@ export default function SuperAdminPage() {
     <div className="p-6 md:p-10 max-w-4xl mx-auto space-y-8 bg-slate-50 min-h-screen font-sans text-slate-800">
       <div className="flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
         <h1 className="text-xl font-black text-indigo-700 uppercase">Panel Owner</h1>
-        <button onClick={handleLogout} className="text-xs font-bold text-rose-500 uppercase">Keluar</button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setOwnerShowBeasiswa((v) => !v)}
+            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase ${ownerShowBeasiswa ? 'bg-teal-600 text-white' : 'bg-teal-50 text-teal-700'}`}
+          >
+            🎓 {ownerShowBeasiswa ? 'Tutup Beasiswa' : 'Kelola Beasiswa'}
+          </button>
+          <button onClick={handleLogout} className="text-xs font-bold text-rose-500 uppercase">Keluar</button>
+        </div>
       </div>
 
-      <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
-        <h2 className="font-black uppercase text-sm text-slate-600">Pengajuan Admin ({pendingList.length})</h2>
-        {ownerLoading && <p className="text-xs text-slate-400">Memuat...</p>}
-        {!ownerLoading && pendingList.length === 0 && <p className="text-xs text-slate-400">Tidak ada pengajuan menunggu.</p>}
-        {pendingList.map((p) => (
-          <div key={p.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
-            <div>
-              <p className="font-bold text-sm">{p.nama}</p>
-              <p className="text-xs text-slate-400">Kelas: {p.kelas?.nama || '-'}</p>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => handleApproveAdmin(p.id)} className="px-3 py-2 rounded-xl bg-emerald-500 text-white text-xs font-black uppercase">Setujui</button>
-              <button onClick={() => handleRejectAdmin(p.id)} className="px-3 py-2 rounded-xl bg-rose-500 text-white text-xs font-black uppercase">Tolak</button>
-            </div>
+      {ownerShowBeasiswa ? (
+        <>
+          {view !== 'BEASISWA' && (() => { setView('BEASISWA'); return null; })()}
+          {renderBeasiswaSection()}
+        </>
+      ) : (
+        <>
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+            <h2 className="font-black uppercase text-sm text-slate-600">Pengajuan Admin ({pendingList.length})</h2>
+            {ownerLoading && <p className="text-xs text-slate-400">Memuat...</p>}
+            {!ownerLoading && pendingList.length === 0 && <p className="text-xs text-slate-400">Tidak ada pengajuan menunggu.</p>}
+            {pendingList.map((p) => (
+              <div key={p.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                <div>
+                  <p className="font-bold text-sm">{p.nama}</p>
+                  <p className="text-xs text-slate-400">Kelas: {p.kelas?.nama || '-'}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => handleApproveAdmin(p.id)} className="px-3 py-2 rounded-xl bg-emerald-500 text-white text-xs font-black uppercase">Setujui</button>
+                  <button onClick={() => handleRejectAdmin(p.id)} className="px-3 py-2 rounded-xl bg-rose-500 text-white text-xs font-black uppercase">Tolak</button>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
-        <h2 className="font-black uppercase text-sm text-slate-600">Admin Aktif ({adminList.length})</h2>
-        {adminList.map((a) => (
-          <div key={a.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
-            <div>
-              <p className="font-bold text-sm">{a.nama}</p>
-              <p className="text-xs text-slate-400">Kelas: {a.kelas?.nama || '-'}</p>
-            </div>
-            <button onClick={() => handleRevokeAdmin(a.id)} className="px-3 py-2 rounded-xl bg-slate-200 text-slate-600 text-xs font-black uppercase">Cabut Akses</button>
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+            <h2 className="font-black uppercase text-sm text-slate-600">Admin Aktif ({adminList.length})</h2>
+            {adminList.map((a) => (
+              <div key={a.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                <div>
+                  <p className="font-bold text-sm">{a.nama}</p>
+                  <p className="text-xs text-slate-400">Kelas: {a.kelas?.nama || '-'}</p>
+                </div>
+                <button onClick={() => handleRevokeAdmin(a.id)} className="px-3 py-2 rounded-xl bg-slate-200 text-slate-600 text-xs font-black uppercase">Cabut Akses</button>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
     </div>
   );
 
@@ -782,7 +1122,7 @@ export default function SuperAdminPage() {
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 bg-white p-5 md:p-6 rounded-3xl shadow-sm border border-slate-100">
         <div>
           <h1 className="text-lg md:text-xl font-black text-indigo-700 uppercase">
-            {view === 'WEB' ? 'Admin Manajemen Konten' : view === 'ABSEN' ? 'Admin Absensi' : 'Admin Jadwal Akademik'}
+            {view === 'WEB' ? 'Admin Manajemen Konten' : view === 'ABSEN' ? 'Admin Absensi' : view === 'JADWAL' ? 'Admin Jadwal Akademik' : 'Admin Beasiswa'}
           </h1>
           <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">
             {adminProfile.nama} • Kelas {adminProfile.kelas_nama}
@@ -807,6 +1147,12 @@ export default function SuperAdminPage() {
               className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase ${view === 'ABSEN' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}
             >
               Absensi
+            </button>
+            <button
+              onClick={() => setView('BEASISWA')}
+              className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase ${view === 'BEASISWA' ? 'bg-teal-600 text-white' : 'text-slate-500'}`}
+            >
+              🎓 Beasiswa
             </button>
           </div>
           <button onClick={handleLogout} className="bg-red-50 text-red-600 px-4 py-2 rounded-xl font-black text-xs">LOGOUT</button>
@@ -1084,7 +1430,7 @@ export default function SuperAdminPage() {
             </div>
           </div>
         </div>
-      ) : (
+      ) : view === 'JADWAL' ? (
         <div className="space-y-8">
 
           {/* JADWAL MINGGUAN (POLA TETAP) */}
@@ -1222,8 +1568,9 @@ export default function SuperAdminPage() {
             </div>
           </div>
         </div>
+      ) : (
+        renderBeasiswaSection()
       )}
     </div>
   );
 }
-

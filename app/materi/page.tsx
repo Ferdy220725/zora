@@ -1,9 +1,18 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { motion, useMotionValue, useTransform, useSpring } from "framer-motion";
 import { BookOpen, PackageOpen, Download } from 'lucide-react';
+
+// --- HELPER: GENERATE LINK GOOGLE DRIVE DARI fileId ---
+function getDriveViewLink(fileId: string) {
+  return `https://drive.google.com/file/d/${fileId}/view`;
+}
+
+function getDriveDownloadLink(fileId: string) {
+  return `https://drive.google.com/uc?export=download&id=${fileId}`;
+}
 
 // --- KOMPONEN INTERAKTIF (3D EFFECT) ---
 function InteractiveCard({ children }: { children: React.ReactNode }) {
@@ -47,7 +56,7 @@ interface Materi {
   id: string;
   judul: string;
   mk_nama: string;
-  file_url: string;
+  file_url: string; // sekarang berisi Google Drive fileId (bukan URL penuh)
   semester?: string | number; // Menambahkan field semester (opsional agar aman)
 }
 
@@ -162,7 +171,7 @@ export default function MateriPage() {
                 {/* Action Button */}
                 <div className="mt-6 flex gap-2">
                   <a
-                    href={m.file_url}
+                    href={getDriveViewLink(m.file_url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-1 text-center py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase shadow-md hover:bg-indigo-700 active:scale-95 transition-all"
@@ -170,8 +179,9 @@ export default function MateriPage() {
                     Lihat Materi
                   </a>
                   <a
-                    href={m.file_url}
-                    download
+                    href={getDriveDownloadLink(m.file_url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="w-14 flex items-center justify-center bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 rounded-2xl shadow-sm hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all"
                     title="Unduh Materi"
                   >
