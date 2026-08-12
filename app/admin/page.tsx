@@ -485,6 +485,7 @@ export default function SuperAdminPage() {
     }
   };
 
+  // --- UPLOAD MATERI (pakai Supabase Storage bucket 'uploads', BUKAN Google Drive) ---
   const handleUploadMateri = async () => {
     if (!adminProfile) return;
     if (!file) return alert("Silakan pilih file terlebih dahulu!");
@@ -494,26 +495,25 @@ export default function SuperAdminPage() {
     if (file.type !== 'application/pdf') return alert("File materi harus berformat PDF!");
 
     try {
-      const uploadFormData = new FormData();
-      uploadFormData.append('file', file);
+      // Nama file unik biar nggak numpuk/ketiban file lain di bucket
+      const namaFileUnik = `${adminProfile.kelas_id}/${Date.now()}_${file.name}`;
 
-      const uploadRes = await fetch('/api/upload-drive', {
-        method: 'POST',
-        body: uploadFormData,
-      });
+      const { error: uploadError } = await supabase.storage
+        .from('uploads')
+        .upload(namaFileUnik, file);
 
-      const uploadResult = await uploadRes.json();
-
-      if (!uploadRes.ok || !uploadResult.fileId) {
-        console.error("Drive Upload Error:", uploadResult.error);
-        return alert("Gagal Upload File ke Drive: " + (uploadResult.error || "Unknown error"));
+      if (uploadError) {
+        console.error("Upload Error:", uploadError);
+        return alert("Gagal Upload File ke Supabase: " + uploadError.message);
       }
 
-      const fileId = uploadResult.fileId;
+      const { data: publicUrlData } = supabase.storage
+        .from('uploads')
+        .getPublicUrl(namaFileUnik);
 
       const { error: dbError } = await supabase.from('materi').insert([{
         judul: judulMateri.trim(),
-        file_url: fileId,
+        file_url: publicUrlData.publicUrl,
         mk_nama: mkMateri.trim(),
         semester: parseInt(semesterMateri),
         kelas_id: adminProfile.kelas_id,
@@ -521,7 +521,7 @@ export default function SuperAdminPage() {
 
       if (dbError) {
         console.error("Database Error:", dbError);
-        return alert("File terupload ke Drive, tapi GAGAL simpan ke Database: " + dbError.message);
+        return alert("File terupload, tapi GAGAL simpan ke Database: " + dbError.message);
       }
 
       alert("Materi Berhasil Diunggah dan Disimpan!");
