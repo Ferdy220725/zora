@@ -23,10 +23,13 @@ export const metadata: Metadata = {
   description: "Zora: Pusat informasi dan manajemen kelas mahasiswa. Dimana Bumi dan Ilmu Pengetahuan Bersatu.",
   keywords: ["Zora", "Zoraferrs", "Agroteknologi", "UPN", "Manajemen Kelas", "Pertanian", "simalas", "manajemen kelas", "Sistem Manajemen Kelas", "manajemen kelas", "zora", "ZORA", "Zora", "Kelas", "kelas"],
   verification: {
-    google: ["googlec0409801ae0d1598", "-c_oKPxD--bqsEt7rMvILOccQIqJQfajX5CJUZQbxpM"],
+    google: [
+      "googlec0409801ae0d1598",
+      "-c_oKPxD--bqsEt7rMvILOccQIqJQfajX5CJUZQbxpM",
+      "AR9_6P7RJUU2rPvyjrF_dZN2Pi1RZE0s8Q-kGItQjuM"
+    ],
   },
 };
-
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
