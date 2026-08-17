@@ -29,6 +29,7 @@ function LupaPasswordForm() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(false); // 👈 state baru, khusus indikator redirect
 
   const supabase = createClient();
   const router = useRouter();
@@ -81,6 +82,7 @@ function LupaPasswordForm() {
     if (error) {
       setError("Kode OTP salah atau sudah kadaluarsa.");
     } else {
+      setInfo(""); // 👈 reset biar gak kebawa ke step berikutnya
       setStep("newPassword");
     }
   };
@@ -104,10 +106,12 @@ function LupaPasswordForm() {
 
     const { error } = await supabase.auth.updateUser({ password });
 
+    setLoading(false);
+
     if (error) {
-      setLoading(false);
       setError("Gagal mengganti password. Coba lagi beberapa saat.");
     } else {
+      setRedirecting(true); // 👈 dipisah dari `info`, khusus nandain lagi proses redirect
       setInfo("Password berhasil diubah! Mengarahkan ke halaman login...");
       setTimeout(() => {
         router.push("/login");
@@ -334,11 +338,11 @@ function LupaPasswordForm() {
 
               <button
                 type="submit"
-                disabled={loading || !!info}
+                disabled={loading || redirecting}
                 className="w-full bg-[#800020] text-white text-sm font-bold py-3 rounded-2xl hover:bg-[#800020]/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {(loading || !!info) && <Loader2 size={16} className="animate-spin" />}
-                {info ? "Mengarahkan..." : loading ? "Menyimpan..." : "Simpan Password Baru"}
+                {(loading || redirecting) && <Loader2 size={16} className="animate-spin" />}
+                {redirecting ? "Mengarahkan..." : loading ? "Menyimpan..." : "Simpan Password Baru"}
               </button>
             </form>
           )}
