@@ -52,11 +52,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: "ZORA - Sistem Manajemen dan Informasi Akademik",
     description: "Pusat informasi dan manajemen kelas untuk seluruh mahasiswa lintas program studi. Dimana Bumi dan Ilmu Pengetahuan Bersatu.",
-    url: "https://zora.example.com", // ganti dengan domain asli Zora
+    url: "https://zoraferrs.vercel.app",
     siteName: "Zora",
     images: [
       {
-        url: "/og-image.png", // taruh file gambar di folder /public
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Zora - Sistem Manajemen dan Informasi Akademik",
@@ -93,7 +93,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="id" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased transition-colors duration-700 bg-white dark:bg-[#0a0a0a] text-slate-900 dark:text-white`}
       >
