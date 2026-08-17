@@ -51,7 +51,7 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: "ZORA - Sistem Manajemen dan Informasi Akademik",
-    description: "Pusat informasi dan manajemen kelas untuk seluruh mahasiswa lintas program studi. Dimana Bumi dan Ilmu Pengetahuan Bersatu.",
+    description: "Zora adalah platform manajemen dan informasi akademik yang menghubungkan mahasiswa, asisten, dan dosen dalam satu sistem — materi, tugas, absensi, dan jadwal kuliah, semua dalam satu tempat.",
     url: "https://zoraferrs.vercel.app",
     siteName: "Zora",
     images: [
