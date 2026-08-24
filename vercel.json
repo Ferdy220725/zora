@@ -1,8 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/webhook?cron=all_tasks",
-      "schedule": "0 0 * * *"
-    }
-  ]
-}
+{}
