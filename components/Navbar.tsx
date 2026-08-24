@@ -28,6 +28,8 @@ import {
   User,
   QrCode,
   Award,
+  Send,
+  Link2,
 } from "lucide-react";
 
 interface NavItem {
@@ -48,10 +50,11 @@ const mainNavItems: NavItem[] = [
   { id: "praktikum", name: "Tugas Praktikum", href: "/praktikum", icon: <FlaskConical size={20} /> },
   { id: "kelompok", name: "Bagi Kelompok", href: "/acak-kelompok", icon: <Users size={20} /> },
   { id: "presentasi", name: "Presentasi", href: "/presentasi", icon: <MonitorPlay size={20} />, badge: "QR" },
+  { id: "shortener", name: "Perpendek Link", href: "/shortener", icon: <Link2 size={20} /> }, // ⬅️ menu baru
   { id: "kalender", name: "Kalender Akademik", href: "/jadwal-sistem/list", icon: <CalendarDays size={20} /> },
   { id: "zora-ai", name: "Zora AI", href: "/zora-ai", icon: <Sparkles size={20} />, comingSoon: true },
   { id: "pengumuman", name: "Pengumuman", href: "/pengumuman", icon: <Megaphone size={20} /> },
-  { id: "beasiswa", name: "Info Beasiswa", href: "/beasiswa", icon: <Award size={20} /> }, // ⬅️ menu baru
+  { id: "beasiswa", name: "Beasiswa", href: "/beasiswa", icon: <Award size={20} /> },
   { id: "laporan", name: "Laporan", href: "/laporan", icon: <ClipboardList size={20} /> },
   { id: "profil", name: "Profil", href: "/akun-saya", icon: <User size={22} /> },
   {
@@ -74,6 +77,13 @@ const footerNavItems: NavItem[] = [
   { id: "settings", name: "Admin", href: "/admin", icon: <Settings size={20} /> },
   { id: "bantuan", name: "Bantuan & Tentang", href: "/tentang", icon: <HelpCircle size={20} /> },
   {
+    id: "telegram",
+    name: "Telegram",
+    href: "https://t.me/+agzCj0uB9OMyMmVl",
+    icon: <Send size={20} />,
+    external: true,
+  },
+  {
     id: "eksternal",
     name: "SIAMIK",
     href: "https://siamik.upnjatim.ac.id/html/siamik/index.asp",
@@ -87,7 +97,7 @@ const mobileTabItems: NavItem[] = [
   { id: "dashboard", name: "Dashboard", href: "/dashboard", icon: <LayoutDashboard size={22} /> },
   { id: "kalender", name: "Kalender", href: "/jadwal-sistem/list", icon: <CalendarDays size={22} /> },
   { id: "pengumuman", name: "Pengumuman", href: "/pengumuman", icon: <Megaphone size={24} /> },
-  { id: "asisten-zora", name: "Asisten", href: "", icon: <notification size={22} /> },
+  { id: "asisten-zora", name: "Asisten", href: "", icon: <Sparkles size={22} /> },
   { id: "profil", name: "Profil", href: "/akun-saya", icon: <User size={22} /> },
 ];
 
