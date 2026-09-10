@@ -1,7 +1,8 @@
 "use client";
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
-import { Lock, CheckCircle2, ClipboardCheck, XCircle, Loader2 } from 'lucide-react';
+import { Lock, CheckCircle2, ClipboardCheck, XCircle, Loader2, AlertTriangle } from 'lucide-react';
 
 // Daftar Mahasiswa tetap dipertahankan sesuai aslinya
 const DAFTAR_MAHASISWA = [
@@ -53,6 +54,9 @@ const DAFTAR_MAHASISWA = [
 ];
 
 export default function AbsensiMahasiswa() {
+  const searchParams = useSearchParams();
+  const kelasId = searchParams.get('kelas');
+
   const [selectedStudent, setSelectedStudent] = useState('');
   const [namaManual, setNamaManual] = useState('');
   const [npmManual, setNpmManual] = useState('');
@@ -69,14 +73,18 @@ export default function AbsensiMahasiswa() {
   const supabase = createClient();
 
   useEffect(() => {
+    if (!kelasId) {
+      setLoading(false);
+      return;
+    }
     checkStatus();
-  }, []);
+  }, [kelasId]);
 
   const checkStatus = async () => {
     const { data } = await supabase
       .from('status_sistem')
       .select('is_active, kode_akses')
-      .eq('id', 'absensi')
+      .eq('kelas_id', kelasId)
       .maybeSingle();
 
     setIsOpen(data?.is_active || false);
@@ -122,6 +130,7 @@ export default function AbsensiMahasiswa() {
         .from('absensi')
         .select('id')
         .eq('npm', finalNpm)
+        .eq('kelas_id', kelasId)
         .gte('waktu_absen', `${today}T00:00:00Z`)
         .lte('waktu_absen', `${today}T23:59:59Z`)
         .maybeSingle();
@@ -137,7 +146,8 @@ export default function AbsensiMahasiswa() {
         .insert([{
           nama_mahasiswa: finalNama,
           npm: finalNpm,
-          waktu_absen: new Date().toISOString()
+          waktu_absen: new Date().toISOString(),
+          kelas_id: kelasId
         }]);
 
       if (error) throw error;
@@ -155,6 +165,19 @@ export default function AbsensiMahasiswa() {
   if (loading) return (
     <div className="flex h-screen items-center justify-center bg-[#f7f7fb] dark:bg-[#0a0a0a]">
       <Loader2 className="animate-spin text-indigo-600" size={28} />
+    </div>
+  );
+
+  // --- LINK TIDAK MEMBAWA kelas_id ---
+  if (!kelasId) return (
+    <div className="flex h-screen items-center justify-center bg-[#f7f7fb] dark:bg-[#0a0a0a] p-6">
+      <div className="text-center bg-white dark:bg-[#141414] p-10 rounded-[32px] shadow-sm border border-slate-100 dark:border-white/10 max-w-md w-full">
+        <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center mx-auto mb-5">
+          <AlertTriangle className="text-amber-600" size={28} />
+        </div>
+        <h1 className="text-2xl font-black text-slate-900 dark:text-white mb-2">Link Tidak Valid</h1>
+        <p className="text-sm font-medium text-slate-400">Link absensi ini tidak menyertakan kelas. Minta link yang benar ke admin/dosen kelasmu.</p>
+      </div>
     </div>
   );
 
