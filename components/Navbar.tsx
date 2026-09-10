@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { createClient } from "@/utils/supabase/client";
 import AsistenZoraSwitch from "@/components/AsistenZoraSwitch";
 import AsistenZoraTabButton from "@/components/AsistenZoraTabButton";
 import {
@@ -121,6 +122,9 @@ export default function Navbar() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
+  // kelas_id mahasiswa yang lagi login — dipakai buat nyusun link /absensi?kelas=...
+  const [kelasId, setKelasId] = useState<string | null>(null);
+
   useEffect(() => {
     setShouldShow(true);
   }, [pathname]);
@@ -128,6 +132,25 @@ export default function Navbar() {
   useEffect(() => {
     setIsDrawerOpen(false);
   }, [pathname]);
+
+  // Ambil kelas_id dari profil user yang login, sekali di awal
+  useEffect(() => {
+    const fetchKelasId = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("kelas_id")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profile?.kelas_id) setKelasId(profile.kelas_id);
+    };
+
+    fetchKelasId();
+  }, []);
 
   // Sembunyikan navbar SEPENUHNYA saat browser dalam mode fullscreen
   // (misalnya saat mode presentasi layar penuh sedang aktif)
@@ -161,23 +184,33 @@ export default function Navbar() {
     }
   };
 
-  const isActive = (href: string) => pathname === href;
+  // Item absensi butuh ?kelas=<kelas_id> biar halaman absensi tahu status buka/tutup
+  // & kode akses kelas yang benar. Kalau kelas_id belum kebaca, href jatuh balik ke "/absensi"
+  // biasa (nanti halaman itu sendiri yang nampilin pesan "Link Tidak Valid").
+  const resolveHref = (item: NavItem) => {
+    if (item.id === "absensi" && kelasId) {
+      return `/absensi?kelas=${kelasId}`;
+    }
+    return item.href;
+  };
+
+  const isActive = (item: NavItem) => pathname === item.href;
 
   const renderNavLink = (item: NavItem, variant: "sidebar" | "drawer") => (
     <Link
       key={item.id}
-      href={item.href}
+      href={resolveHref(item)}
       onClick={(e) => handleItemClick(item, e)}
       target={item.external ? "_blank" : undefined}
       rel={item.external ? "noopener noreferrer" : undefined}
       className={`group flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-        isActive(item.href)
+        isActive(item)
           ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
           : "text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-white/5 hover:text-indigo-700 dark:hover:text-white"
       } ${item.comingSoon ? "opacity-60" : ""}`}
     >
       <span className="flex items-center gap-3">
-        <span className={isActive(item.href) ? "text-white" : "text-indigo-500 dark:text-indigo-400"}>
+        <span className={isActive(item) ? "text-white" : "text-indigo-500 dark:text-indigo-400"}>
           {item.icon}
         </span>
         {item.name}
@@ -185,7 +218,7 @@ export default function Navbar() {
       {item.badge && (
         <span
           className={`flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md ${
-            isActive(item.href) ? "bg-white/20 text-white" : "bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300"
+            isActive(item) ? "bg-white/20 text-white" : "bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300"
           }`}
         >
           <QrCode size={11} /> {item.badge}
@@ -307,7 +340,7 @@ export default function Navbar() {
               href={item.href}
               onClick={(e) => handleItemClick(item, e)}
               className={`flex flex-col items-center gap-1 px-2 py-1 text-[10px] font-bold ${
-                isActive(item.href) ? "text-indigo-600" : "text-slate-400 dark:text-slate-500"
+                isActive(item) ? "text-indigo-600" : "text-slate-400 dark:text-slate-500"
               }`}
             >
               {item.icon}
