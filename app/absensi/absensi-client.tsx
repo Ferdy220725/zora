@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
-import { Lock, CheckCircle2, ClipboardCheck, XCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { Lock, CheckCircle2, ClipboardCheck, XCircle, Loader2, AlertTriangle, LogIn } from 'lucide-react';
 
 // Daftar Mahasiswa tetap dipertahankan sesuai aslinya
 const DAFTAR_MAHASISWA = [
@@ -55,7 +55,7 @@ const DAFTAR_MAHASISWA = [
 
 export default function AbsensiMahasiswa() {
   const searchParams = useSearchParams();
-  const kelasId = searchParams.get('kelas');
+  const kelasIdFromUrl = searchParams.get('kelas');
 
   const [selectedStudent, setSelectedStudent] = useState('');
   const [namaManual, setNamaManual] = useState('');
@@ -70,21 +70,59 @@ export default function AbsensiMahasiswa() {
   const [isVerified, setIsVerified] = useState(false);
   const [kodeBenarDariDB, setKodeBenarDariDB] = useState('');
 
+  // --- STATE UNTUK RESOLVE kelas_id (dari URL, atau fallback dari akun login) ---
+  const [resolvedKelasId, setResolvedKelasId] = useState<string | null>(null);
+  const [needsLogin, setNeedsLogin] = useState(false);
+  const [kelasNotFound, setKelasNotFound] = useState(false);
+
   const supabase = createClient();
 
   useEffect(() => {
-    if (!kelasId) {
+    resolveKelasAndCheckStatus();
+  }, [kelasIdFromUrl]);
+
+  // Prioritas: 1) ?kelas= di URL (link publik per-kelas yang dibagikan dosen/admin)
+  //            2) kelas_id dari profil user yang lagi login (akses dari dalam dashboard, tanpa link khusus)
+  const resolveKelasAndCheckStatus = async () => {
+    setLoading(true);
+    setNeedsLogin(false);
+    setKelasNotFound(false);
+
+    if (kelasIdFromUrl) {
+      setResolvedKelasId(kelasIdFromUrl);
+      await checkStatus(kelasIdFromUrl);
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      setNeedsLogin(true);
       setLoading(false);
       return;
     }
-    checkStatus();
-  }, [kelasId]);
 
-  const checkStatus = async () => {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('kelas_id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!profile?.kelas_id) {
+      setKelasNotFound(true);
+      setLoading(false);
+      return;
+    }
+
+    setResolvedKelasId(profile.kelas_id);
+    await checkStatus(profile.kelas_id);
+  };
+
+  const checkStatus = async (kelasIdParam: string) => {
     const { data } = await supabase
       .from('status_sistem')
       .select('is_active, kode_akses')
-      .eq('kelas_id', kelasId)
+      .eq('kelas_id', kelasIdParam)
       .maybeSingle();
 
     setIsOpen(data?.is_active || false);
@@ -102,6 +140,11 @@ export default function AbsensiMahasiswa() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!resolvedKelasId) {
+      alert("Kelas tidak terdeteksi. Silakan refresh halaman ini.");
+      return;
+    }
 
     let finalNama = "";
     let finalNpm = "";
@@ -130,7 +173,7 @@ export default function AbsensiMahasiswa() {
         .from('absensi')
         .select('id')
         .eq('npm', finalNpm)
-        .eq('kelas_id', kelasId)
+        .eq('kelas_id', resolvedKelasId)
         .gte('waktu_absen', `${today}T00:00:00Z`)
         .lte('waktu_absen', `${today}T23:59:59Z`)
         .maybeSingle();
@@ -147,7 +190,7 @@ export default function AbsensiMahasiswa() {
           nama_mahasiswa: finalNama,
           npm: finalNpm,
           waktu_absen: new Date().toISOString(),
-          kelas_id: kelasId
+          kelas_id: resolvedKelasId
         }]);
 
       if (error) throw error;
@@ -168,15 +211,28 @@ export default function AbsensiMahasiswa() {
     </div>
   );
 
-  // --- LINK TIDAK MEMBAWA kelas_id ---
-  if (!kelasId) return (
+  // --- BELUM LOGIN & LINK GAK BAWA ?kelas= ---
+  if (needsLogin) return (
+    <div className="flex h-screen items-center justify-center bg-[#f7f7fb] dark:bg-[#0a0a0a] p-6">
+      <div className="text-center bg-white dark:bg-[#141414] p-10 rounded-[32px] shadow-sm border border-slate-100 dark:border-white/10 max-w-md w-full">
+        <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center mx-auto mb-5">
+          <LogIn className="text-amber-600" size={28} />
+        </div>
+        <h1 className="text-2xl font-black text-slate-900 dark:text-white mb-2">Silakan Login Dulu</h1>
+        <p className="text-sm font-medium text-slate-400">Kamu perlu login supaya sistem tahu kelasmu sebelum bisa mengisi presensi.</p>
+      </div>
+    </div>
+  );
+
+  // --- SUDAH LOGIN TAPI PROFIL GAK PUNYA kelas_id ---
+  if (kelasNotFound) return (
     <div className="flex h-screen items-center justify-center bg-[#f7f7fb] dark:bg-[#0a0a0a] p-6">
       <div className="text-center bg-white dark:bg-[#141414] p-10 rounded-[32px] shadow-sm border border-slate-100 dark:border-white/10 max-w-md w-full">
         <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center mx-auto mb-5">
           <AlertTriangle className="text-amber-600" size={28} />
         </div>
-        <h1 className="text-2xl font-black text-slate-900 dark:text-white mb-2">Link Tidak Valid</h1>
-        <p className="text-sm font-medium text-slate-400">Link absensi ini tidak menyertakan kelas. Minta link yang benar ke admin/dosen kelasmu.</p>
+        <h1 className="text-2xl font-black text-slate-900 dark:text-white mb-2">Kelas Tidak Terdeteksi</h1>
+        <p className="text-sm font-medium text-slate-400">Akun kamu belum terhubung ke kelas manapun. Hubungi admin untuk memperbaiki ini.</p>
       </div>
     </div>
   );
