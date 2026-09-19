@@ -326,7 +326,7 @@ const SuratIzinMahasiswa = () => {
       `Melalui pesan ini, saya bermaksud mengajukan permohonan izin untuk tidak mengikuti perkuliahan pada tanggal ${formatTanggalInput(
         dataTerkirim.tanggal
       )}, dikarenakan ${dataTerkirim.alasan || "-"}.` +
-      (denganLampiran ? " Surat permohonan izin resmi saya lampirkan bersama pesan ini." : "") +
+      (denganLampiran ? " Surat permohonan izin saya lampirkan dengan pesan ini." : "") +
       `\n\n` +
       `Atas perhatian dan izin yang Bapak/Ibu berikan, saya ucapkan terima kasih.\n\n` +
       `Hormat saya,\n${dataTerkirim.namaLengkap}`
