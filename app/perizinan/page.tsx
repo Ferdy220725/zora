@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import SignatureCanvas from "react-signature-canvas";
 import { jsPDF } from "jspdf";
 import { createClient } from "@/utils/supabase/client"; // Pastikan path ini sesuai dengan project Next.js kamu
+import { GRUP_WHATSAPP, type GrupWhatsapp } from "@/utils/grubwhatsapp"; // Daftar grup WA mata kuliah (hardcode)
 
 // ── Helper format tanggal ke Bahasa Indonesia ──────────────────────────────
 const NAMA_BULAN = [
@@ -39,10 +40,21 @@ const SuratIzinMahasiswa = () => {
 
   // State buat tahap "setelah submit"
   const [suratPdfUrl, setSuratPdfUrl] = useState<string | null>(null);
-  const [suratPdfBlob, setSuratPdfBlob] = useState<Blob | null>(null); // dipakai buat Web Share (file asli)
+  // File PDF asli, dibuat SEKALI saat submit (bukan saat tombol diklik) supaya
+  // navigator.share bisa dipanggil langsung dari klik user tanpa jeda async.
+  const [suratPdfFile, setSuratPdfFile] = useState<File | null>(null);
   const [showKirimPanel, setShowKirimPanel] = useState(false);
-  const [namaFilePdf, setNamaFilePdf] = useState("");
 
+  // ── Tujuan pengiriman: grup WA mata kuliah (default) atau nomor dosen ──
+  const [tujuanKirim, setTujuanKirim] = useState<"grup" | "dosen">("grup");
+
+  // Alur GRUP
+  const [grupTerpilih, setGrupTerpilih] = useState<GrupWhatsapp | null>(null);
+  const [bisaShareFile, setBisaShareFile] = useState(false); // true di HP yang support share file
+  const [pesanDisalin, setPesanDisalin] = useState(false);
+  const [grupSelesai, setGrupSelesai] = useState(false);
+
+  // Alur DOSEN (nomor pribadi)
   // Nomor WA dosen tujuan (diisi mahasiswa di panel setelah submit)
   const [nomorWaDosen, setNomorWaDosen] = useState("");
   // Progres pengiriman 2 langkah: pengantar dulu, baru PDF
@@ -120,6 +132,21 @@ const SuratIzinMahasiswa = () => {
       window.removeEventListener("resize", preserveSignatures);
     };
   }, []);
+
+  // ── Cek apakah perangkat ini bisa share FILE lewat Web Share API ─────────
+  // Dicek di effect (bukan saat render) karena `navigator` tidak ada di server.
+  useEffect(() => {
+    if (!suratPdfFile) {
+      setBisaShareFile(false);
+      return;
+    }
+    const ok =
+      typeof navigator !== "undefined" &&
+      !!navigator.share &&
+      !!navigator.canShare &&
+      navigator.canShare({ files: [suratPdfFile] });
+    setBisaShareFile(ok);
+  }, [suratPdfFile]);
 
   // ── FIX #2: Tutup keyboard otomatis begitu user mulai menyentuh area
   // tanda tangan.
@@ -284,9 +311,12 @@ const SuratIzinMahasiswa = () => {
     return doc;
   };
 
-  // ── Template pesan pengantar WA (dikirim sebagai bubble teks terpisah,
-  // SEBELUM PDF-nya dikirim di langkah kedua) ────────────────────────────
-  const buildPesanPengantar = () => {
+  // ── Template pesan pengantar WA ──────────────────────────────────────────
+  // denganLampiran = true → dipakai buat GRUP: PDF dikirim bersamaan sebagai
+  // lampiran, jadi pesan ini berfungsi sebagai caption-nya.
+  // denganLampiran = false → dipakai buat DOSEN: pesan dikirim sebagai bubble
+  // teks terpisah, PDF menyusul di langkah kedua.
+  const buildPesanPengantar = (denganLampiran = false) => {
     const sapaan = dataTerkirim.namaDosen?.trim()
       ? `Yth. ${dataTerkirim.namaDosen}`
       : "Yth. Bapak/Ibu Dosen";
@@ -295,11 +325,94 @@ const SuratIzinMahasiswa = () => {
       `Mohon izin, perkenalkan saya *${dataTerkirim.namaLengkap}* (NPM: ${dataTerkirim.npm}), mahasiswa pada mata kuliah ${dataTerkirim.namaMatkul || "-"}.\n\n` +
       `Melalui pesan ini, saya bermaksud mengajukan permohonan izin untuk tidak mengikuti perkuliahan pada tanggal ${formatTanggalInput(
         dataTerkirim.tanggal
-      )}, dikarenakan ${dataTerkirim.alasan || "-"}.\n\n` +
+      )}, dikarenakan ${dataTerkirim.alasan || "-"}.` +
+      (denganLampiran ? " Surat permohonan izin resmi saya lampirkan bersama pesan ini." : "") +
+      `\n\n` +
       `Atas perhatian dan izin yang Bapak/Ibu berikan, saya ucapkan terima kasih.\n\n` +
       `Hormat saya,\n${dataTerkirim.namaLengkap}`
     );
   };
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ALUR GRUP WHATSAPP MATA KULIAH
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // Grup yang namanya cocok dengan isian "Mata Kuliah" ditandai & dinaikkan ke atas.
+  const cocokDenganMatkul = (g: GrupWhatsapp) => {
+    if (g.umum) return false;
+    const a = g.nama.trim().toLowerCase();
+    const b = dataTerkirim.namaMatkul.trim().toLowerCase();
+    return b.length >= 4 && (a === b || a.includes(b) || b.includes(a));
+  };
+
+  const grupUrut = [...GRUP_WHATSAPP].sort(
+    (a, b) => Number(cocokDenganMatkul(b)) - Number(cocokDenganMatkul(a))
+  );
+
+  const pilihGrup = (g: GrupWhatsapp) => {
+    setGrupTerpilih(g);
+    setPesanDisalin(false);
+    setGrupSelesai(false);
+  };
+
+  // Unduh PDF ke perangkat (dipakai di desktop / kalau share tidak didukung)
+  const unduhPdf = () => {
+    if (!suratPdfFile) return;
+    const url = URL.createObjectURL(suratPdfFile);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = suratPdfFile.name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  // Salin pesan pengantar ke clipboard (cadangan kalau caption tidak ikut
+  // terbawa saat share, atau untuk alur manual di desktop).
+  const salinPesanGrup = async () => {
+    const pesan = buildPesanPengantar(true);
+    try {
+      await navigator.clipboard.writeText(pesan);
+      setPesanDisalin(true);
+    } catch {
+      // Fallback buat browser yang tidak punya Clipboard API
+      const ta = document.createElement("textarea");
+      ta.value = pesan;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const berhasil = document.execCommand("copy");
+      document.body.removeChild(ta);
+      if (berhasil) setPesanDisalin(true);
+      else alert("Gagal menyalin otomatis. Silakan salin manual dari kotak pesan di atas.");
+    }
+  };
+
+  // Share PDF + pesan pengantar (sebagai caption) lewat menu share HP.
+  // PENTING: tidak boleh ada `await` sebelum navigator.share — browser (terutama
+  // Safari iOS) menolak share kalau sudah lewat dari klik langsung user.
+  const bagikanKeGrup = async () => {
+    if (!suratPdfFile) return;
+    try {
+      await navigator.share({
+        files: [suratPdfFile],
+        text: buildPesanPengantar(true),
+        title: "Surat Izin Kuliah",
+      });
+      setGrupSelesai(true);
+    } catch (err) {
+      // AbortError = user menutup menu share, bukan error
+      if ((err as DOMException)?.name !== "AbortError") {
+        alert(
+          "Menu share tidak bisa dibuka. Pakai cara manual di bawah: salin pesan, buka grup, lalu lampirkan PDF."
+        );
+      }
+    }
+  };
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ALUR DOSEN (nomor pribadi) — tetap dipertahankan sebagai opsi kedua
+  // ══════════════════════════════════════════════════════════════════════════
 
   // ── Langkah 1: buka WA ke nomor dosen, teks pengantar sudah terisi ──────
   // PENTING: pakai api.whatsapp.com/send (bukan wa.me) supaya karakter
@@ -319,32 +432,18 @@ const SuratIzinMahasiswa = () => {
   // mahasiswa tinggal pilih kontak dosennya sendiri dari share sheet HP —
   // biasanya sudah ada di paling atas karena baru saja dibuka di langkah 1.
   const kirimSuratPdf = async () => {
-    if (!suratPdfBlob) return;
-    const fileToShare = new File([suratPdfBlob], namaFilePdf || "Surat_Izin.pdf", {
-      type: "application/pdf",
-    });
-
-    const bisaShareFile =
-      typeof navigator !== "undefined" &&
-      !!navigator.share &&
-      !!navigator.canShare &&
-      navigator.canShare({ files: [fileToShare] });
+    if (!suratPdfFile) return;
 
     if (bisaShareFile) {
       try {
-        await navigator.share({ files: [fileToShare], title: "Surat Izin Kuliah" });
+        await navigator.share({ files: [suratPdfFile], title: "Surat Izin Kuliah" });
         setWaStep("selesai");
       } catch (err) {
         // User membatalkan share — biarkan saja, jangan dianggap error
       }
     } else {
       // Fallback (biasanya desktop): unduh manual lalu instruksikan attach sendiri
-      const url = URL.createObjectURL(fileToShare);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileToShare.name;
-      a.click();
-      URL.revokeObjectURL(url);
+      unduhPdf();
       alert(
         "Perangkat/browser kamu belum mendukung fitur share otomatis. File PDF sudah diunduh — silakan lampirkan manual ke chat WhatsApp dosen."
       );
@@ -427,8 +526,13 @@ const SuratIzinMahasiswa = () => {
       });
 
       setSuratPdfUrl(pdfUrlData.publicUrl);
-      setSuratPdfBlob(pdfBlob);
-      setNamaFilePdf(fileName);
+      setSuratPdfFile(new File([pdfBlob], fileName, { type: "application/pdf" }));
+
+      // Reset state panel kirim — default langsung ke pilihan grup
+      setTujuanKirim("grup");
+      setGrupTerpilih(null);
+      setPesanDisalin(false);
+      setGrupSelesai(false);
       setNomorWaDosen("");
       setWaStep("pengantar");
       setShowKirimPanel(true);
@@ -457,66 +561,210 @@ const SuratIzinMahasiswa = () => {
       {/* ── MODAL: muncul begitu perizinan sukses terkirim ── */}
       {showKirimPanel && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="bg-white dark:bg-[#141414] max-w-md w-full rounded-[30px] p-6 md:p-8 shadow-2xl border border-slate-100 dark:border-white/10 text-center space-y-4 animate-in fade-in zoom-in duration-200">
+          <div className="bg-white dark:bg-[#141414] max-w-md w-full max-h-[90vh] overflow-y-auto rounded-[30px] p-6 md:p-8 shadow-2xl border border-slate-100 dark:border-white/10 text-center space-y-4 animate-in fade-in zoom-in duration-200">
             <div className="w-14 h-14 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto text-2xl font-black">
               ✓
             </div>
             <div>
               <p className="text-sm font-black text-slate-800 dark:text-white uppercase">Data Berhasil Terkirim!</p>
               <p className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase mt-1">
-                Kirim ke Dosen Sekarang
+                {tujuanKirim === "grup" ? "Kirim ke Grup Mata Kuliah" : "Kirim ke Dosen Sekarang"}
               </p>
             </div>
-            <p className="text-[12px] text-slate-500 dark:text-slate-400 leading-relaxed">
-              Isi nomor WhatsApp dosen tujuan, lalu kirim <b>pesan pengantar</b> dan <b>surat PDF</b> secara
-              berurutan. Perizinan baru dianggap masuk kalau kedua langkah ini sudah dikirim ke dosen.
-            </p>
 
-            <div className="text-left space-y-1">
-              <label className="text-[10px] font-black uppercase ml-1 text-slate-400">Nomor WhatsApp Dosen</label>
-              <input
-                type="tel"
-                placeholder="Contoh: 081234567890"
-                className="w-full border-2 border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 p-3 rounded-2xl focus:border-indigo-500 outline-none transition-all"
-                value={nomorWaDosen}
-                onChange={(e) => setNomorWaDosen(e.target.value)}
-                disabled={waStep !== "pengantar"}
-              />
-            </div>
-
-            <div className="flex flex-col gap-3 pt-2">
+            {/* Pilihan tujuan: grup (default) atau nomor dosen */}
+            <div className="grid grid-cols-2 gap-1 p-1 rounded-2xl bg-slate-100 dark:bg-white/5">
               <button
-                onClick={kirimPengantar}
-                disabled={waStep !== "pengantar"}
-                className={`w-full px-5 py-4 rounded-xl font-black text-xs shadow-md transition-all active:scale-95 ${
-                  waStep === "pengantar"
-                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                    : "bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                onClick={() => setTujuanKirim("grup")}
+                className={`py-2 rounded-xl text-[10px] font-black uppercase transition-all ${
+                  tujuanKirim === "grup"
+                    ? "bg-white dark:bg-[#1f1f1f] text-indigo-600 dark:text-indigo-400 shadow-sm"
+                    : "text-slate-400"
                 }`}
               >
-                {waStep === "pengantar" ? "1. Kirim Pesan Pengantar" : "✓ Pesan Pengantar Terkirim"}
+                Grup Mata Kuliah
               </button>
-
               <button
-                onClick={kirimSuratPdf}
-                disabled={waStep === "pengantar"}
-                className={`w-full px-5 py-4 rounded-xl font-black text-xs shadow-md transition-all active:scale-95 ${
-                  waStep === "pdf"
-                    ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                    : waStep === "selesai"
-                    ? "bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
-                    : "bg-slate-100 dark:bg-white/5 text-slate-400 cursor-not-allowed"
+                onClick={() => setTujuanKirim("dosen")}
+                className={`py-2 rounded-xl text-[10px] font-black uppercase transition-all ${
+                  tujuanKirim === "dosen"
+                    ? "bg-white dark:bg-[#1f1f1f] text-indigo-600 dark:text-indigo-400 shadow-sm"
+                    : "text-slate-400"
                 }`}
               >
-                {waStep === "selesai" ? "✓ Surat PDF Terkirim" : "2. Kirim Surat PDF"}
+                Nomor Dosen
               </button>
             </div>
 
-            <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-relaxed">
-              Langkah 1 membuka WhatsApp ke nomor dosen dengan pesan pengantar yang sudah terisi — tinggal
-              pencet kirim. Langkah 2 membuka menu share HP kamu — pilih WhatsApp, lalu pilih nama dosennya
-              (biasanya sudah muncul paling atas), file PDF asli akan terkirim sebagai bubble terpisah.
-            </p>
+            {/* ─────────── TUJUAN: GRUP ─────────── */}
+            {tujuanKirim === "grup" && !grupTerpilih && (
+              <div className="space-y-3 text-left">
+                <p className="text-[12px] text-slate-500 dark:text-slate-400 leading-relaxed text-center">
+                  Pilih grup WhatsApp mata kuliah tujuan surat izinmu. Surat PDF dan kata pengantar akan langsung
+                  disiapkan.
+                </p>
+                <div className="grid grid-cols-1 gap-2">
+                  {grupUrut.map((g) => {
+                    const cocok = cocokDenganMatkul(g);
+                    return (
+                      <button
+                        key={g.id}
+                        onClick={() => pilihGrup(g)}
+                        className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border-2 text-left transition-all active:scale-[0.98] ${
+                          cocok
+                            ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10"
+                            : "border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-white/5 hover:border-indigo-300"
+                        }`}
+                      >
+                        <span className="text-xs font-black text-slate-800 dark:text-white">{g.nama}</span>
+                        {cocok && (
+                          <span className="text-[9px] font-black uppercase text-indigo-600 dark:text-indigo-400">
+                            Sesuai mata kuliah
+                          </span>
+                        )}
+                        {g.umum && (
+                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500">Grup kelas</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {tujuanKirim === "grup" && grupTerpilih && (
+              <div className="space-y-3 text-left">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-black text-slate-800 dark:text-white">Grup: {grupTerpilih.nama}</p>
+                  <button
+                    onClick={() => setGrupTerpilih(null)}
+                    className="text-[10px] font-bold text-slate-400 hover:underline"
+                  >
+                    ← Ganti grup
+                  </button>
+                </div>
+
+                {/* Pratinjau pesan yang akan menyertai PDF */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase ml-1 text-slate-400">Pesan pengantar</label>
+                  <pre className="whitespace-pre-wrap break-words max-h-40 overflow-y-auto text-[11px] leading-relaxed font-sans border-2 border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-700 dark:text-slate-300 p-3 rounded-2xl">
+                    {buildPesanPengantar(true)}
+                  </pre>
+                </div>
+
+                {bisaShareFile ? (
+                  <>
+                    <button
+                      onClick={bagikanKeGrup}
+                      className={`w-full px-5 py-4 rounded-xl font-black text-xs shadow-md transition-all active:scale-95 ${
+                        grupSelesai
+                          ? "bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : "bg-emerald-600 text-white hover:bg-emerald-700"
+                      }`}
+                    >
+                      {grupSelesai ? "✓ Sudah Dibagikan — Kirim Ulang?" : "Kirim PDF + Pesan ke Grup"}
+                    </button>
+                    <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-relaxed text-center">
+                      Menu share HP akan terbuka dengan PDF dan pesan sudah terlampir. Pilih WhatsApp, lalu pilih
+                      grup &ldquo;{grupTerpilih.nama}&rdquo;. Kalau pesan tidak muncul sebagai caption di WhatsApp,
+                      salin dulu lewat tombol di bawah lalu tempel manual.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-relaxed text-center">
+                    Perangkat ini belum mendukung share file otomatis. Ikuti tiga langkah di bawah: salin pesan,
+                    buka grup, lalu tempel pesan dan lampirkan PDF.
+                  </p>
+                )}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={salinPesanGrup}
+                    className={`px-3 py-3 rounded-xl font-black text-[11px] transition-all active:scale-95 ${
+                      pesanDisalin
+                        ? "bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                        : "bg-indigo-600 text-white hover:bg-indigo-700"
+                    }`}
+                  >
+                    {pesanDisalin ? "✓ Pesan Disalin" : bisaShareFile ? "Salin Pesan" : "1. Salin Pesan"}
+                  </button>
+                  <a
+                    href={grupTerpilih.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setGrupSelesai(true)}
+                    className="px-3 py-3 rounded-xl font-black text-[11px] text-center bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-white/15 transition-all active:scale-95"
+                  >
+                    {bisaShareFile ? "Buka Grup" : "2. Buka Grup"}
+                  </a>
+                </div>
+
+                {!bisaShareFile && (
+                  <button
+                    onClick={unduhPdf}
+                    className="w-full px-3 py-3 rounded-xl font-black text-[11px] bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-white/15 transition-all active:scale-95"
+                  >
+                    3. Unduh PDF untuk Dilampirkan
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* ─────────── TUJUAN: NOMOR DOSEN (alur lama) ─────────── */}
+            {tujuanKirim === "dosen" && (
+              <>
+                <p className="text-[12px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Isi nomor WhatsApp dosen tujuan, lalu kirim <b>pesan pengantar</b> dan <b>surat PDF</b> secara
+                  berurutan. Perizinan baru dianggap masuk kalau kedua langkah ini sudah dikirim ke dosen.
+                </p>
+
+                <div className="text-left space-y-1">
+                  <label className="text-[10px] font-black uppercase ml-1 text-slate-400">Nomor WhatsApp Dosen</label>
+                  <input
+                    type="tel"
+                    placeholder="Contoh: 081234567890"
+                    className="w-full border-2 border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 p-3 rounded-2xl focus:border-indigo-500 outline-none transition-all"
+                    value={nomorWaDosen}
+                    onChange={(e) => setNomorWaDosen(e.target.value)}
+                    disabled={waStep !== "pengantar"}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-3 pt-2">
+                  <button
+                    onClick={kirimPengantar}
+                    disabled={waStep !== "pengantar"}
+                    className={`w-full px-5 py-4 rounded-xl font-black text-xs shadow-md transition-all active:scale-95 ${
+                      waStep === "pengantar"
+                        ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                        : "bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                    }`}
+                  >
+                    {waStep === "pengantar" ? "1. Kirim Pesan Pengantar" : "✓ Pesan Pengantar Terkirim"}
+                  </button>
+
+                  <button
+                    onClick={kirimSuratPdf}
+                    disabled={waStep === "pengantar"}
+                    className={`w-full px-5 py-4 rounded-xl font-black text-xs shadow-md transition-all active:scale-95 ${
+                      waStep === "pdf"
+                        ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                        : waStep === "selesai"
+                        ? "bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                        : "bg-slate-100 dark:bg-white/5 text-slate-400 cursor-not-allowed"
+                    }`}
+                  >
+                    {waStep === "selesai" ? "✓ Surat PDF Terkirim" : "2. Kirim Surat PDF"}
+                  </button>
+                </div>
+
+                <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-relaxed">
+                  Langkah 1 membuka WhatsApp ke nomor dosen dengan pesan pengantar yang sudah terisi — tinggal
+                  pencet kirim. Langkah 2 membuka menu share HP kamu — pilih WhatsApp, lalu pilih nama dosennya
+                  (biasanya sudah muncul paling atas), file PDF asli akan terkirim sebagai bubble terpisah.
+                </p>
+              </>
+            )}
 
             {suratPdfUrl && (
               <a
@@ -529,7 +777,7 @@ const SuratIzinMahasiswa = () => {
               </a>
             )}
 
-            {waStep === "selesai" && (
+            {(grupSelesai || waStep === "selesai") && (
               <button
                 onClick={() => setShowKirimPanel(false)}
                 className="text-[10px] font-bold text-slate-400 hover:underline pt-1"
@@ -545,7 +793,7 @@ const SuratIzinMahasiswa = () => {
         <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 to-purple-600 rounded-[22px] p-6 mb-8 text-center text-white">
           <h1 className="text-2xl font-black uppercase tracking-tight relative z-10">Form Perizinan Kuliah</h1>
           <p className="text-xs font-bold text-indigo-100 mt-1 relative z-10">
-            Lengkapi data untuk dikirim langsung ke dosen
+            Lengkapi data untuk dikirim langsung ke grup WhatsApp mata kuliah
           </p>
           <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
         </div>
@@ -760,7 +1008,7 @@ const SuratIzinMahasiswa = () => {
         </button>
 
         <p className="text-center text-[9px] text-slate-400 mt-6 font-bold uppercase">
-          Setelah dikirim, kamu akan diarahkan mengirim surat langsung ke dosen via WhatsApp.
+          Setelah dikirim, kamu akan diarahkan memilih grup WhatsApp mata kuliah untuk mengirim surat.
         </p>
       </div>
     </div>
