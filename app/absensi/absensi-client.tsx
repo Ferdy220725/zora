@@ -65,10 +65,9 @@ export default function AbsensiMahasiswa() {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // --- STATE UNTUK KODE AKSES DINAMIS ---
+  // --- STATE UNTUK KODE AKSES (diverifikasi di server saat submit) ---
   const [inputKode, setInputKode] = useState('');
   const [isVerified, setIsVerified] = useState(false);
-  const [kodeBenarDariDB, setKodeBenarDariDB] = useState('');
 
   // --- STATE UNTUK RESOLVE kelas_id (dari URL, atau fallback dari akun login) ---
   const [resolvedKelasId, setResolvedKelasId] = useState<string | null>(null);
@@ -118,24 +117,20 @@ export default function AbsensiMahasiswa() {
     await checkStatus(profile.kelas_id);
   };
 
+  // 1 request ringan: cuma nanya "absen lagi dibuka atau nggak"
   const checkStatus = async (kelasIdParam: string) => {
-    const { data } = await supabase
-      .from('status_sistem')
-      .select('is_active, kode_akses')
-      .eq('kelas_id', kelasIdParam)
-      .maybeSingle();
-
-    setIsOpen(data?.is_active || false);
-    setKodeBenarDariDB(data?.kode_akses || '');
+    const { data } = await supabase.rpc('absen_status', { p_kelas_id: kelasIdParam });
+    setIsOpen(data === true);
     setLoading(false);
   };
 
+  // Kode TIDAK dicek di browser lagi (biar gak bisa diintip). Dicek di server saat submit.
   const handleVerifikasiKode = () => {
-    if (inputKode.toUpperCase() === kodeBenarDariDB.toUpperCase()) {
-      setIsVerified(true);
-    } else {
-      alert("Kode Absensi Salah! Silakan hubungi Admin/Dosen.");
+    if (!inputKode.trim()) {
+      alert("Masukkan kode absensi dulu!");
+      return;
     }
+    setIsVerified(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -164,36 +159,33 @@ export default function AbsensiMahasiswa() {
     setIsSubmitting(true);
 
     try {
-      const now = new Date();
-      const wibOffset = 7 * 60 * 60;
-      const wibTime = new Date(now.getTime() + wibOffset);
-      const today = wibTime.toISOString().split('T')[0];
-
-      const { data: existing } = await supabase
-        .from('absensi')
-        .select('id')
-        .eq('npm', finalNpm)
-        .eq('kelas_id', resolvedKelasId)
-        .gte('waktu_absen', `${today}T00:00:00Z`)
-        .lte('waktu_absen', `${today}T23:59:59Z`)
-        .maybeSingle();
-
-      if (existing) {
-        alert("NPM ini sudah melakukan presensi hari ini!");
-        setIsSubmitting(false);
-        return;
-      }
-
-      const { error } = await supabase
-        .from('absensi')
-        .insert([{
-          nama_mahasiswa: finalNama,
-          npm: finalNpm,
-          waktu_absen: new Date().toISOString(),
-          kelas_id: resolvedKelasId
-        }]);
+      // 1 request: server yang cek status, kode, duplikat, lalu insert
+      const { data, error } = await supabase.rpc('submit_absensi', {
+        p_kelas_id: resolvedKelasId,
+        p_kode: inputKode,
+        p_nama: finalNama,
+        p_npm: finalNpm
+      });
 
       if (error) throw error;
+
+      if (data === 'CLOSED') {
+        setIsOpen(false);
+        return;
+      }
+      if (data === 'WRONG_CODE') {
+        alert("Kode Absensi Salah! Silakan hubungi Admin/Dosen.");
+        setIsVerified(false);
+        setInputKode('');
+        return;
+      }
+      if (data === 'DUPLICATE') {
+        alert("NPM ini sudah melakukan presensi hari ini!");
+        return;
+      }
+      if (data !== 'OK') {
+        throw new Error("Respons tidak dikenali dari server.");
+      }
 
       localStorage.setItem('nama_user_solaria', finalNama);
       setIsSuccess(true);
@@ -292,7 +284,7 @@ export default function AbsensiMahasiswa() {
           </div>
         </div>
       ) : (
-        /* TAMPILAN 2: FORMULIR ABSENSI ASLI (MUNCUL SETELAH KODE BENAR) */
+        /* TAMPILAN 2: FORMULIR ABSENSI ASLI (MUNCUL SETELAH KODE DIISI) */
         <div className="w-full max-w-md bg-white dark:bg-[#141414] rounded-[32px] shadow-sm border border-slate-100 dark:border-white/10 animate-in slide-in-from-bottom-10 duration-500">
           <div className="p-8 md:p-10">
             <div className="mb-8 text-center">
@@ -300,7 +292,7 @@ export default function AbsensiMahasiswa() {
                 <ClipboardCheck className="text-white" size={22} />
               </div>
               <h1 className="text-xl font-black text-slate-900 dark:text-white">Absensi Mahasiswa</h1>
-              <p className="text-xs font-bold text-emerald-600 mt-1">✓ Terverifikasi</p>
+              <p className="text-xs font-bold text-slate-400 mt-1">Pilih nama lalu kirim</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
