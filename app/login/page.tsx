@@ -1,149 +1,188 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { createClient } from '@/utils/supabase/client';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
-export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [namaLengkap, setNamaLengkap] = useState('');
-  const [npm, setNpm] = useState('');
-  const [checkingSession, setCheckingSession] = useState(true);
-  const [loading, setLoading] = useState(false);
-
-  const supabase = createClient();
+export default function LoginPage() {
   const router = useRouter();
+  const supabase = createClient();
 
-  // Kalau user sudah punya session aktif (misal baru selesai set password),
-  // langsung lempar ke dashboard, nggak perlu isi form login lagi.
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        router.replace('/dashboard');
-      } else {
-        setCheckingSession(false);
-      }
-    });
-  }, []);
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [role, setRole] = useState<"asisten" | "praktikan">("praktikan");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [nama, setNama] = useState("");
+  const [npm, setNpm] = useState("");
+  const [kodeKelas, setKodeKelas] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-
-    if (!namaLengkap.trim() || !npm.trim()) {
-      alert("Nama Lengkap dan NPM wajib diisi untuk sinkronisasi data kelas!");
+    setLoading(true);
+    setError(null);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) {
+      setError("Email atau password salah.");
       return;
     }
+    router.push("/dashboard");
+    router.refresh();
+  }
 
+  async function handleRegister(e: React.FormEvent) {
+    e.preventDefault();
     setLoading(true);
+    setError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: { data: { nama, npm, role } },
     });
 
     if (error) {
-      alert("Gagal login: " + error.message);
       setLoading(false);
-    } else {
-      localStorage.setItem('nama_user_solaria', namaLengkap.trim());
-      localStorage.setItem('npm_user_solaria', npm.trim());
-      router.push('/dashboard');
+      setError(error.message);
+      return;
     }
-  };
 
-  if (checkingSession) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f7f7fb] dark:bg-[#0a0a0a]">
-        <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-      </div>
-    );
+    // Kalau praktikan mengisi kode kelas, langsung daftarkan ke kelas tersebut
+    if (role === "praktikan" && kodeKelas.trim() && data.user) {
+      const { data: kelas } = await supabase
+        .from("kelas_praktikum")
+        .select("id")
+        .eq("kode_kelas", kodeKelas.trim().toUpperCase())
+        .maybeSingle();
+
+      if (kelas) {
+        await supabase
+          .from("anggota_kelas")
+          .insert({ kelas_id: kelas.id, praktikan_id: data.user.id });
+      } else {
+        setError("Akun berhasil dibuat, tapi kode kelas tidak ditemukan. Kamu bisa join kelas nanti dari dashboard.");
+      }
+    }
+
+    setLoading(false);
+    router.push("/dashboard");
+    router.refresh();
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f7f7fb] dark:bg-[#0a0a0a] p-6">
-      <form
-        onSubmit={handleLogin}
-        className="bg-white dark:bg-[#141414] p-8 rounded-[30px] shadow-sm max-w-md w-full space-y-4 border border-slate-100 dark:border-white/10"
-      >
-        {/* Header ala hero card dashboard: gradient indigo-purple, rounded besar */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 to-purple-600 rounded-[22px] p-6 mb-2 text-center text-white">
-          <p className="text-2xl relative z-10">👋</p>
-          <h2 className="text-xl font-black uppercase tracking-tight mt-1 relative z-10">
-            Login Sobat Agrotek
-          </h2>
-          <p className="text-xs text-indigo-100 mt-1 relative z-10">Semangat menjalani hari ini...</p>
-          <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
+    <div className="min-h-screen bg-ink relative overflow-hidden flex items-center justify-center px-4">
+      <div
+        className="pointer-events-none absolute -top-40 -left-32 h-96 w-96 rounded-full opacity-20 blur-3xl"
+        style={{ background: "radial-gradient(circle, #B98CE0, transparent 70%)" }}
+      />
+      <div
+        className="pointer-events-none absolute -bottom-40 -right-32 h-96 w-96 rounded-full opacity-20 blur-3xl"
+        style={{ background: "radial-gradient(circle, #E7AC5D, transparent 70%)" }}
+      />
+
+      <div className="w-full max-w-sm relative">
+        <div className="flex items-center gap-2 mb-8 justify-center">
+          <span className="h-7 w-7 rounded-lg bg-gradient-to-br from-accent1 to-accent2" />
+          <span className="font-display text-lg font-medium text-white tracking-tight">SiPraktikum</span>
         </div>
 
-        <div>
-          <label className="block text-xs font-black uppercase text-slate-400 mb-1">
-            Nama Lengkap (Sesuai SIAKAD)
-          </label>
-          <input
-            type="text"
-            value={namaLengkap}
-            onChange={(e) => setNamaLengkap(e.target.value)}
-            placeholder="Contoh: Ahmat Choyrul Ferdyansyah"
-            className="w-full p-3 rounded-xl bg-slate-50 dark:bg-white/5 border-2 border-slate-100 dark:border-white/10 text-sm font-medium text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-indigo-500 outline-none"
-            required
-          />
+        <div className="surface p-8">
+          <h1 className="font-display text-2xl font-medium text-white tracking-tight">
+            {mode === "login" ? "Masuk ke akunmu" : "Buat akun baru"}
+          </h1>
+          <p className="text-sm text-white/45 mt-1 mb-6">
+            Kelola absensi, tugas, dan nilai praktikum di satu tempat.
+          </p>
+
+          <div className="flex gap-1 mb-6 bg-white/[0.04] p-1 rounded-full text-sm">
+            <button
+              className={mode === "login" ? "flex-1 py-1.5 rounded-full bg-white/10 text-white font-medium transition" : "flex-1 py-1.5 rounded-full text-white/45 transition"}
+              onClick={() => setMode("login")}
+            >
+              Masuk
+            </button>
+            <button
+              className={mode === "register" ? "flex-1 py-1.5 rounded-full bg-white/10 text-white font-medium transition" : "flex-1 py-1.5 rounded-full text-white/45 transition"}
+              onClick={() => setMode("register")}
+            >
+              Daftar
+            </button>
+          </div>
+
+          <form onSubmit={mode === "login" ? handleLogin : handleRegister} className="space-y-3">
+            {mode === "register" && (
+              <>
+                <div className="flex gap-2 text-sm mb-1">
+                  <button
+                    type="button"
+                    onClick={() => setRole("praktikan")}
+                    className={role === "praktikan" ? "flex-1 py-1.5 rounded-full bg-gradient-to-r from-accent1 to-accent2 text-ink font-medium" : "flex-1 py-1.5 rounded-full border border-white/10 text-white/60"}
+                  >
+                    Praktikan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRole("asisten")}
+                    className={role === "asisten" ? "flex-1 py-1.5 rounded-full bg-gradient-to-r from-accent1 to-accent2 text-ink font-medium" : "flex-1 py-1.5 rounded-full border border-white/10 text-white/60"}
+                  >
+                    Asisten
+                  </button>
+                </div>
+                <input
+                  className="field"
+                  placeholder="Nama lengkap"
+                  value={nama}
+                  onChange={(e) => setNama(e.target.value)}
+                  required
+                />
+                <input
+                  className="field"
+                  placeholder="NPM/NIM"
+                  value={npm}
+                  onChange={(e) => setNpm(e.target.value)}
+                />
+                {role === "praktikan" && (
+                  <input
+                    className="field"
+                    placeholder="Kode kelas (opsional, dari asisten)"
+                    value={kodeKelas}
+                    onChange={(e) => setKodeKelas(e.target.value)}
+                  />
+                )}
+              </>
+            )}
+            <input
+              type="email"
+              className="field"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+            <input
+              type="password"
+              className="field"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+            />
+
+            {error && <p className="text-rose-300/90 text-xs">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary w-full py-2.5"
+            >
+              {loading ? "Memproses..." : mode === "login" ? "Masuk" : "Daftar"}
+            </button>
+          </form>
         </div>
-
-        <div>
-          <label className="block text-xs font-black uppercase text-slate-400 mb-1">
-            NPM / Nomor Pokok Mahasiswa
-          </label>
-          <input
-            type="text"
-            value={npm}
-            onChange={(e) => setNpm(e.target.value)}
-            placeholder="Contoh: 25025010..."
-            className="w-full p-3 rounded-xl bg-slate-50 dark:bg-white/5 border-2 border-slate-100 dark:border-white/10 text-sm font-mono text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-indigo-500 outline-none"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-black uppercase text-slate-400 mb-1">Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="username@email.com"
-            className="w-full p-3 rounded-xl bg-slate-50 dark:bg-white/5 border-2 border-slate-100 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-indigo-500 outline-none"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-black uppercase text-slate-400 mb-1">Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            className="w-full p-3 rounded-xl bg-slate-50 dark:bg-white/5 border-2 border-slate-100 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-indigo-500 outline-none"
-            required
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-xl font-black uppercase tracking-wider text-sm shadow-md active:scale-95 transition-all disabled:opacity-50"
-        >
-          {loading ? "Memproses..." : "Masuk Sistem 🚀"}
-        </button>
-
-        <Link
-          href="/lupa-password"
-          className="block text-center text-xs text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
-        >
-          Lupa kata sandi?
-        </Link>
-      </form>
+      </div>
     </div>
   );
 }
